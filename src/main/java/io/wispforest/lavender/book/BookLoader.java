@@ -12,6 +12,7 @@ import net.minecraft.client.util.ModelIdentifier;
 import net.minecraft.registry.Registries;
 import net.minecraft.resource.ResourceFinder;
 import net.minecraft.resource.ResourceManager;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.JsonHelper;
 import org.jetbrains.annotations.Nullable;
@@ -72,6 +73,11 @@ public class BookLoader {
             var extendId = tryGetId(bookObject, "extend");
             var dynamicBookModelId = tryGetId(bookObject, "dynamic_book_model");
 
+            Text dynamicBookName = null;
+            if (bookObject.has("dynamic_book_name")) {
+                dynamicBookName = Text.Serializer.fromJson(bookObject.get("dynamic_book_name"));
+            }
+
             var openSoundId = tryGetId(bookObject, "open_sound");
             var openSoundEvent = openSoundId != null ? Registries.SOUND_EVENT.get(openSoundId) : null;
             var flippingSoundId = tryGetId(bookObject, "flipping_sound");
@@ -83,7 +89,7 @@ public class BookLoader {
             var displayUnreadEntryNotifications = JsonHelper.getBoolean(bookObject, "display_unread_entry_notifications", true);
             var macros = GSON.fromJson(JsonHelper.getObject(bookObject, "macros", new JsonObject()), MACROS_TOKEN);
 
-            var book = new Book(resourceId, extendId, textureId, dynamicBookModelId, openSoundEvent, flippingSoundEvent, introEntryId, displayUnreadEntryNotifications, displayCompletion, macros);
+            var book = new Book(resourceId, extendId, textureId, dynamicBookModelId, dynamicBookName, openSoundEvent, flippingSoundEvent, introEntryId, displayUnreadEntryNotifications, displayCompletion, macros);
             LOADED_BOOKS.put(resourceId, book);
             if (extendId == null) VISIBLE_BOOKS.put(resourceId, book);
         });

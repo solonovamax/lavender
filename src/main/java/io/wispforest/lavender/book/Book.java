@@ -14,6 +14,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtHelper;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -32,6 +33,7 @@ public final class Book {
     private final Identifier id;
     private final @Nullable Identifier texture;
     private final @Nullable Identifier dynamicBookModel;
+    private final @Nullable Text dynamicBookName;
     private final SoundEvent openSound, flippingSound;
     private final @Nullable Identifier introEntry;
     private final boolean displayUnreadEntryNotifications;
@@ -61,6 +63,7 @@ public final class Book {
             @Nullable Identifier extend,
             @Nullable Identifier texture,
             @Nullable Identifier dynamicBookModel,
+            @Nullable Text dynamicBookName,
             @Nullable SoundEvent openSound,
             @Nullable SoundEvent flippingSound,
             @Nullable Identifier introEntry,
@@ -72,6 +75,7 @@ public final class Book {
         this.extend = extend;
         this.texture = texture;
         this.dynamicBookModel = dynamicBookModel;
+        this.dynamicBookName = dynamicBookName;
         this.openSound = openSound != null ? openSound : Lavender.ITEM_BOOK_OPEN;
         this.flippingSound = flippingSound != null ? flippingSound : SoundEvents.ITEM_BOOK_PAGE_TURN;
         this.introEntry = introEntry;
@@ -223,6 +227,10 @@ public final class Book {
 
     public @Nullable Identifier dynamicBookModel() {
         return this.dynamicBookModel;
+    }
+
+    public @Nullable Text dynamicBookName() {
+        return this.dynamicBookName;
     }
 
     public SoundEvent openSound() {
