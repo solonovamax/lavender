@@ -1,18 +1,25 @@
 package io.wispforest.lavender.book;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 import com.google.gson.JsonParseException;
 import io.wispforest.lavender.Lavender;
-import io.wispforest.lavendermd.util.StringNibbler;
+import io.wispforest.owo.ui.core.Component;
+import io.wispforest.owo.ui.core.Sizing;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NbtHelper;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -25,7 +32,9 @@ public final class Book {
     private final Identifier id;
     private final @Nullable Identifier texture;
     private final @Nullable Identifier dynamicBookModel;
+    private final SoundEvent openSound, flippingSound;
     private final @Nullable Identifier introEntry;
+    private final boolean displayUnreadEntryNotifications;
     private final boolean displayCompletion;
     private final Map<String, String> zeroArgMacros = new HashMap<>();
     private final Map<Pattern, Macro> macros = new HashMap<>();
@@ -40,19 +49,33 @@ public final class Book {
     private final Collection<Entry> entriesView = Collections.unmodifiableCollection(this.entriesById.values());
 
     private final Map<Category, List<Entry>> entriesByCategory = new HashMap<>();
-    private final Map<Item, Entry> entriesByAssociatedItem = new HashMap<>();
+    private final Multimap<Item, Entry> entriesByAssociatedItem = HashMultimap.create();
 
     private final List<Entry> orphanedEntries = new ArrayList<>();
     private final Collection<Entry> orphanedEntriesView = Collections.unmodifiableCollection(this.orphanedEntries);
 
     private @Nullable Entry landingPage = null;
 
-    public Book(Identifier id, @Nullable Identifier extend, @Nullable Identifier texture, @Nullable Identifier dynamicBookModel, @Nullable Identifier introEntry, boolean displayCompletion, Map<String, String> macros) {
+    public Book(
+            Identifier id,
+            @Nullable Identifier extend,
+            @Nullable Identifier texture,
+            @Nullable Identifier dynamicBookModel,
+            @Nullable SoundEvent openSound,
+            @Nullable SoundEvent flippingSound,
+            @Nullable Identifier introEntry,
+            boolean displayUnreadEntryNotifications,
+            boolean displayCompletion,
+            Map<String, String> macros
+    ) {
         this.id = id;
         this.extend = extend;
         this.texture = texture;
         this.dynamicBookModel = dynamicBookModel;
+        this.openSound = openSound != null ? openSound : Lavender.ITEM_BOOK_OPEN;
+        this.flippingSound = flippingSound != null ? flippingSound : SoundEvents.ITEM_BOOK_PAGE_TURN;
         this.introEntry = introEntry;
+        this.displayUnreadEntryNotifications = displayUnreadEntryNotifications;
         this.displayCompletion = displayCompletion;
 
         macros.forEach((macro, replacement) -> {
@@ -69,7 +92,7 @@ public final class Book {
                 var argMatcher = MACRO_ARG_PATTERN.matcher(result);
 
                 while (argMatcher.find()) {
-                    parts.add(replacement.substring(0, argMatcher.start()));
+                    parts.add(result.substring(0, argMatcher.start()));
                     argIndices.add(Integer.parseInt(argMatcher.group().substring(1)) - 1);
 
                     result.delete(0, argMatcher.end());
@@ -78,7 +101,7 @@ public final class Book {
 
                 parts.add(result.toString());
                 this.macros.put(
-                        Pattern.compile(Pattern.quote(macro) + "\\(" + Stream.generate(() -> "\\S").limit(argCount).collect(Collectors.joining(",")) + "\\)"),
+                        Pattern.compile(Pattern.quote(macro) + "\\(" + Stream.generate(() -> "(.*)").limit(argCount).collect(Collectors.joining(",")) + "\\)"),
                         new Macro(parts, argIndices)
                 );
             } else {
@@ -93,6 +116,10 @@ public final class Book {
 
     public boolean displayCompletion() {
         return this.displayCompletion;
+    }
+
+    public boolean displayUnreadEntryNotifications() {
+        return this.displayUnreadEntryNotifications;
     }
 
     public Collection<Entry> entries() {
@@ -113,8 +140,19 @@ public final class Book {
         return this.entriesById.get(entryId);
     }
 
-    public @Nullable Entry entryByAssociatedItem(Item associatedItem) {
-        return this.entriesByAssociatedItem.get(associatedItem);
+    public @Nullable Entry entryByAssociatedItem(ItemStack associatedStack) {
+        var candidates = this.entriesByAssociatedItem.get(associatedStack.getItem());
+        for (var candidateEntry : candidates) {
+            for (var candidateAssociatedStack : candidateEntry.associatedItems()) {
+                if (candidateAssociatedStack.getItem() != associatedStack.getItem()) continue;
+
+                if (NbtHelper.matches(candidateAssociatedStack.getNbt(), associatedStack.getNbt(), true)) {
+                    return candidateEntry;
+                }
+            }
+        }
+
+        return null;
     }
 
     public @Nullable Collection<Entry> entriesByCategory(Category category) {
@@ -122,6 +160,19 @@ public final class Book {
         if (entries == null) return null;
 
         return Collections.unmodifiableCollection(entries);
+    }
+
+    public @Nullable Collection<Entry> descendantEntriesByCategory(Category category) {
+        var entries = new ArrayList<Entry>();
+        for (var candidate : this.categories.values()) {
+            if (candidate == category || Objects.equals(candidate.parent(), category.id())) {
+                var possibleEntries = this.entriesByCategory(candidate);
+                if (possibleEntries != null) entries.addAll(possibleEntries);
+            }
+        }
+
+        if (entries.isEmpty()) return null;
+        return entries;
     }
 
     public Collection<Category> categories() {
@@ -133,7 +184,7 @@ public final class Book {
     }
 
     public boolean shouldDisplayCategory(Category category, ClientPlayerEntity player) {
-        var entries = this.entriesByCategory(category);
+        var entries = this.descendantEntriesByCategory(category);
         if (entries == null) return false;
 
         boolean anyVisible = false;
@@ -142,6 +193,24 @@ public final class Book {
         }
 
         return anyVisible;
+    }
+
+    public boolean shouldDisplayUnreadNotification(Entry entry) {
+        return this.displayUnreadEntryNotifications && !LavenderClientStorage.wasEntryViewed(this, entry);
+    }
+
+    public boolean shouldDisplayUnreadNotification(Category category, ClientPlayerEntity player) {
+        if (!this.displayUnreadEntryNotifications) return false;
+
+        var entries = this.descendantEntriesByCategory(category);
+        if (entries == null) return false;
+
+        for (var entry : entries) {
+            if (!entry.canPlayerView(player)) continue;
+            if (!LavenderClientStorage.wasEntryViewed(this, entry)) return true;
+        }
+
+        return false;
     }
 
     public @Nullable Entry landingPage() {
@@ -154,6 +223,14 @@ public final class Book {
 
     public @Nullable Identifier dynamicBookModel() {
         return this.dynamicBookModel;
+    }
+
+    public SoundEvent openSound() {
+        return this.openSound;
+    }
+
+    public SoundEvent flippingSound() {
+        return this.flippingSound;
     }
 
     public int countVisibleEntries(ClientPlayerEntity player) {
@@ -170,18 +247,22 @@ public final class Book {
 
     String expandMacros(Identifier entry, String input) {
         var builder = new StringBuilder(input);
-        this.zeroArgMacros.forEach((pattern, replacement) -> {
-            int replaceIndex = builder.indexOf(pattern);
-            while (replaceIndex != -1) {
-                builder.replace(replaceIndex, replaceIndex + pattern.length(), replacement);
-                replaceIndex = builder.indexOf(pattern, replaceIndex + replacement.length());
-            }
-        });
 
         int scans = 0;
         boolean anyExpansions = true;
-        while (scans < 1000 && anyExpansions) {
+        while (scans < 1000  && anyExpansions) {
             anyExpansions = false;
+
+            for (var pattern : this.zeroArgMacros.keySet()) {
+                int replaceIndex = builder.indexOf(pattern);
+                while (replaceIndex != -1) {
+                    var replacement = this.zeroArgMacros.get(pattern);
+                    anyExpansions = true;
+
+                    builder.replace(replaceIndex, replaceIndex + pattern.length(), replacement);
+                    replaceIndex = builder.indexOf(pattern, replaceIndex + replacement.length());
+                }
+            }
 
             for (var pattern : this.macros.keySet()) {
                 var replacement = this.macros.get(pattern);
@@ -191,12 +272,9 @@ public final class Book {
                     scans++;
                     anyExpansions = true;
 
-                    var match = matcher.group();
-                    var argsNibbler = new StringNibbler(match.substring(match.indexOf('(') + 1, match.length() - 1));
-
                     var args = new ArrayList<String>();
-                    while (argsNibbler.hasNext()) {
-                        args.add(argsNibbler.consumeEscapedString(',', true));
+                    for (int i = 1; i <= matcher.groupCount(); i++) {
+                        args.add(matcher.group(i));
                     }
 
                     builder.replace(matcher.start(), matcher.end(), replacement.apply(args));
@@ -233,7 +311,7 @@ public final class Book {
             this.resolvedExtend.addEntry(entry);
         } else {
             this.entriesById.put(entry.id(), entry);
-            entry.associatedItems().forEach(item -> this.entriesByAssociatedItem.put(item, entry));
+            entry.associatedItems().forEach(stack -> this.entriesByAssociatedItem.put(stack.getItem(), entry));
 
             if (this.categories.containsKey(entry.category())) {
                 this.entriesByCategory
@@ -268,7 +346,7 @@ public final class Book {
 
     public interface BookmarkableElement {
         String title();
-        ItemStack icon();
+        Function<Sizing, Component> iconFactory();
     }
 
     public record Macro(List<String> parts, IntList argIndices) {

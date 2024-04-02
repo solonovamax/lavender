@@ -83,7 +83,7 @@ public class LavenderBookItem extends Item {
      */
     public static @Nullable Identifier bookIdOf(ItemStack bookStack) {
         if (!(bookStack.getItem() instanceof LavenderBookItem book)) return null;
-        return book.bookId != null ? book.bookId : bookStack.getOr(BOOK_ID, null);
+        return book.bookId != null ? book.bookId : bookStack.get(BOOK_ID);
     }
 
     /**

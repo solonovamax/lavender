@@ -5,10 +5,10 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.lavender.book.*;
+import io.wispforest.lavender.md.ItemListComponent;
 import io.wispforest.lavender.md.compiler.BookCompiler;
-import io.wispforest.lavender.md.features.PageBreakFeature;
-import io.wispforest.lavender.md.features.RecipeFeature;
-import io.wispforest.lavender.md.features.StructureFeature;
+import io.wispforest.lavender.md.features.*;
+import io.wispforest.lavendermd.MarkdownFeature;
 import io.wispforest.lavendermd.MarkdownProcessor;
 import io.wispforest.lavendermd.feature.*;
 import io.wispforest.owo.Owo;
@@ -18,6 +18,7 @@ import io.wispforest.owo.ui.component.*;
 import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.core.*;
 import io.wispforest.owo.ui.parsing.UIModel;
 import io.wispforest.owo.ui.parsing.UIParsing;
@@ -32,12 +33,13 @@ import net.minecraft.client.util.Window;
 import net.minecraft.recipe.Recipe;
 import net.minecraft.recipe.RecipeType;
 import net.minecraft.sound.SoundEvent;
-import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.MathHelper;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -45,11 +47,14 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements CommandOpenedScreen {
 
     private static final Identifier DEFAULT_BOOK_TEXTURE = Lavender.id("textures/gui/brown_book.png");
-    private static final Map<Identifier, Map<RecipeType<?>, RecipeFeature.RecipeHandler<?>>> RECIPE_HANDLERS = new HashMap<>();
+
+    private static final Map<Identifier, Map<RecipeType<?>, RecipeFeature.RecipePreviewBuilder<?>>> RECIPE_HANDLERS = new HashMap<>();
+    private static final Map<Identifier, FeatureProvider> FEATURE_PROVIDERS = new HashMap<>();
 
     private static final Map<Identifier, List<NavFrame.Replicator>> NAV_TRAILS = new HashMap<>();
 
@@ -78,14 +83,21 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         this.book = book;
         this.isOverlay = isOverlay;
 
-        this.processor = MarkdownProcessor.richText(0)
+        var processor = MarkdownProcessor.richText(0)
                 .copyWith(() -> new BookCompiler(this.bookComponentSource))
                 .copyWith(
                         new ImageFeature(), new BlockStateFeature(), new ItemStackFeature(), new EntityFeature(),
                         new PageBreakFeature(), new OwoUITemplateFeature(this.bookComponentSource),
                         new RecipeFeature(this.bookComponentSource, RECIPE_HANDLERS.get(this.book.id())),
-                        new StructureFeature(this.bookComponentSource), new KeybindFeature()
+                        new StructureFeature(this.bookComponentSource), new KeybindFeature(),
+                        new ItemTagFeature(), new OwoUIModelFeature(), new TranslationsFeature()
                 );
+
+        if (FEATURE_PROVIDERS.get(book.id()) != null) {
+            processor = processor.copyWith(FEATURE_PROVIDERS.get(book.id()).createFeatures(this.bookComponentSource).toArray(MarkdownFeature[]::new));
+        }
+
+        this.processor = processor;
     }
 
     public LavenderBookScreen(Book book) {
@@ -97,7 +109,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         this.window = this.client.getWindow();
         double gameScale = this.window.getScaleFactor();
 
-        this.scaleFactor = this.window.calculateScaleFactor(this.client.options.getGuiScale().getValue(), true);
+        this.scaleFactor = this.window.calculateScaleFactor(!this.isOverlay ? this.client.options.getGuiScale().getValue() : 0, true);
         this.window.setScaleFactor(this.scaleFactor);
 
         this.width = this.window.getScaledWidth();
@@ -118,10 +130,20 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
 
     protected <C extends Component> C template(UIModel model, Class<C> expectedComponentClass, String name, Map<String, String> parameters) {
         var params = new HashMap<String, String>();
-        params.put("book-texture", (this.book.texture() != null ? this.book.texture() : DEFAULT_BOOK_TEXTURE).toString());
+        params.put("book-texture", this.bookTexture().toString());
         params.putAll(parameters);
 
         return model.expandTemplate(expectedComponentClass, name, params);
+    }
+
+    protected Identifier bookTexture() {
+        return this.book.texture() != null ? this.book.texture() : DEFAULT_BOOK_TEXTURE;
+    }
+
+    @Override
+    protected <C extends Component> @NotNull C component(Class<C> expectedClass, String id) {
+        //noinspection DataFlowIssue
+        return super.component(expectedClass, id);
     }
 
     @Override
@@ -138,7 +160,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         (this.returnButton = this.component(ButtonComponent.class, "back-button")).onPress(button -> {
             if (Screen.hasShiftDown()) {
                 while (this.navStack.size() > 1) this.navStack.pop();
-                this.rebuildContent(SoundEvents.ITEM_BOOK_PAGE_TURN);
+                this.rebuildContent(this.book.flippingSound());
             } else {
                 this.navPop();
             }
@@ -184,13 +206,13 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         }
 
         LavenderClientStorage.markBookOpened(this.book.id());
-        this.rebuildContent(!this.isOverlay ? Lavender.ITEM_BOOK_OPEN : null);
+        this.rebuildContent(!this.isOverlay ? this.book.openSound() : null);
     }
 
     private void rebuildContent(@Nullable SoundEvent sound) {
         if (sound != null) this.client.player.playSound(sound, 1f, 1f);
 
-        var pageSupplier = this.currentNavFrame().pageSupplier;
+        var pageSupplier = this.currentNavFrame().replicator().pageSupplier.apply(this);
         int selectedPage = this.currentNavFrame().selectedPage;
 
         if (selectedPage >= pageSupplier.pageCount()) {
@@ -228,9 +250,9 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                 if (element == null) continue;
 
                 var bookmarkComponent = this.createBookmarkButton("bookmark");
-                bookmarkComponent.childById(ItemComponent.class, "bookmark-preview").stack(element.icon());
+                bookmarkComponent.tooltip(List.of(Text.literal(element.title()), Text.translatable("text.lavender.book.bookmark.remove_hint")));
+                bookmarkComponent.childById(StackLayout.class, "bookmark-preview").child(element.iconFactory().apply(Sizing.fill(100)).cursorStyle(CursorStyle.HAND));
                 bookmarkComponent.childById(ButtonComponent.class, "bookmark-button").<ButtonComponent>configure(bookmarkButton -> {
-                    bookmarkButton.tooltip(List.of(Text.literal(element.title()), Text.translatable("text.lavender.book.bookmark.remove_hint")));
                     bookmarkButton.onPress($ -> {
                         if (Screen.hasShiftDown()) {
                             LavenderClientStorage.removeBookmark(this.book, bookmark);
@@ -280,7 +302,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         frame.selectedPage = Math.max(0, Math.min(frame.selectedPage + (left ? -2 : 2), frame.pageSupplier.pageCount() - 1)) / 2 * 2;
 
         if (frame.selectedPage != previousPage) {
-            this.rebuildContent(SoundEvents.ITEM_BOOK_PAGE_TURN);
+            this.rebuildContent(this.book.flippingSound());
         }
     }
 
@@ -304,14 +326,14 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
             this.navStack.push(frame);
         }
 
-        if (!suppressUpdate) this.rebuildContent(SoundEvents.ITEM_BOOK_PAGE_TURN);
+        if (!suppressUpdate) this.rebuildContent(this.book.flippingSound());
     }
 
     public void navPop() {
         if (this.navStack.size() <= 1) return;
 
         this.navStack.pop();
-        this.rebuildContent(SoundEvents.ITEM_BOOK_PAGE_TURN);
+        this.rebuildContent(this.book.flippingSound());
     }
 
     @Override
@@ -421,7 +443,9 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         super.removed();
 
         var trail = new ArrayList<NavFrame.Replicator>();
-        while (!this.navStack.isEmpty()) trail.add(this.navStack.pop().replicator());
+        for (var frame : this.navStack) {
+            trail.add(frame.replicator());
+        }
 
         NAV_TRAILS.put(this.book.id(), trail);
     }
@@ -442,12 +466,43 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         ));
     }
 
+    /**
+     * Push {@code entry} onto the navigation stack of {@code book}, making it the active
+     * entry the next time the player opens this book
+     */
     public static void pushEntry(Book book, Entry entry) {
         getNavTrail(book).add(0, new NavFrame.Replicator(screen -> new EntryPageSupplier(screen, entry), 0));
     }
 
+    /**
+     * Use {@link #registerRecipePreviewBuilder(Identifier, RecipeType, RecipeFeature.RecipePreviewBuilder)} instead
+     */
+    @Deprecated(forRemoval = true)
     public static <R extends Recipe<?>> void registerRecipeHandler(Identifier bookId, RecipeType<R> recipeType, RecipeFeature.RecipeHandler<R> handler) {
-        RECIPE_HANDLERS.computeIfAbsent(bookId, $ -> new HashMap<>()).put(recipeType, handler);
+        registerRecipePreviewBuilder(bookId, recipeType, handler);
+    }
+
+    /**
+     * Register {@code builder} as the preview builder for recipes of {@code recipeType}. This is necessary
+     * to support custom recipe types and only applies to entries defined in the book {@code bookId}.
+     * <p>
+     * If you have multiple books that all display some of your custom recipes, you need to register the
+     * same builder for all of them individually
+     */
+    public static <R extends Recipe<?>> void registerRecipePreviewBuilder(Identifier bookId, RecipeType<R> recipeType, RecipeFeature.RecipePreviewBuilder<R> builder) {
+        RECIPE_HANDLERS.computeIfAbsent(bookId, $ -> new HashMap<>()).put(recipeType, builder);
+    }
+
+    /**
+     * Register {@code provider} as the additional feature provider for the book
+     * {@code bookId}.
+     * <p>
+     * Use this only if you need to build entirely custom markdown components
+     * that cannot be otherwise implemented through owo-ui templates using the
+     * {@code <|template:here|param=value|>} template instantiation syntax
+     */
+    public static void registerFeatureFactory(Identifier bookId, FeatureProvider provider) {
+        FEATURE_PROVIDERS.put(bookId, provider);
     }
 
     public static abstract class PageSupplier {
@@ -495,7 +550,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                 }
 
                 if (descendant instanceof ItemComponent item) {
-                    var entry = this.context.book.entryByAssociatedItem(item.stack().getItem());
+                    var entry = this.context.book.entryByAssociatedItem(item.stack());
                     if (entry == null || (this instanceof EntryPageSupplier entrySupplier && entry == entrySupplier.entry)) {
                         return;
                     }
@@ -505,7 +560,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                     newTooltip.add(TooltipComponent.of(Text.translatable("text.lavender.book.click_to_open").asOrderedText()));
                     newTooltip.add(TooltipComponent.of(TextOps.withFormatting(entry.title(), Formatting.GRAY).asOrderedText()));
 
-                    if (item instanceof RecipeFeature.IngredientComponent ingredient) {
+                    if (item instanceof ItemListComponent ingredient) {
                         ingredient.extraTooltipSection(newTooltip);
                     } else {
                         newTooltip.addAll(0, item.tooltip());
@@ -525,8 +580,9 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
             return component;
         }
 
-        protected List<FlowLayout> buildEntryIndex(Collection<Entry> entries, int... maxEntriesPerPage) {
+        protected List<FlowLayout> buildEntryIndex(Collection<Entry> entries, boolean respectOrdinals, int... pageSizes) {
             var indexSections = new ArrayList<FlowLayout>();
+            var currentSectionHeight = new MutableInt(0);
             indexSections.add(Containers.verticalFlow(Sizing.fill(100), Sizing.content()));
 
             var searchText = this.context.searchBox.getText().strip();
@@ -537,7 +593,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
 
             entries.stream()
                     .sorted((o1, o2) -> AlphanumComparator.compare(o1.title(), o2.title()))
-                    .sorted(Comparator.comparingInt(Entry::ordinal))
+                    .sorted(respectOrdinals ? Comparator.comparingInt(Entry::ordinal) : (o1, o2) -> 0)
                     .sorted(Comparator.comparing(entry -> !entry.canPlayerView(this.context.client.player)))
                     .forEach(entry -> {
                         boolean entryVisible = entry.canPlayerView(this.context.client.player);
@@ -554,14 +610,17 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                             }
                         }
 
-                        ParentComponent indexItem;
+                        FlowLayout indexItem;
+                        boolean hasUnreadNotification;
                         if (entryVisible) {
-                            indexItem = this.context.template(ParentComponent.class, "index-item");
-                            indexItem.childById(ItemComponent.class, "icon").stack(entry.icon());
+                            hasUnreadNotification = this.context.book.shouldDisplayUnreadNotification(entry);
+
+                            indexItem = this.context.template(FlowLayout.class, "index-item");
+                            indexItem.childById(StackLayout.class, "icon-anchor").child(entry.iconFactory().apply(Sizing.fill(100)));
 
                             var label = indexItem.childById(LabelComponent.class, "index-label");
 
-                            label.text(Text.literal(entry.title()).styled($ -> $.withFont(MinecraftClient.UNICODE_FONT_ID)));
+                            label.text(Text.literal(entry.title()).styled($ -> $.withFont(MinecraftClient.UNICODE_FONT_ID).withItalic(false && hasUnreadNotification)));
                             label.mouseDown().subscribe((mouseX, mouseY, button) -> {
                                 if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
 
@@ -573,20 +632,76 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                             var animation = label.color().animate(150, Easing.SINE, Color.ofFormatting(Formatting.GOLD));
                             label.mouseEnter().subscribe(animation::forwards);
                             label.mouseLeave().subscribe(animation::backwards);
+
+                            if (hasUnreadNotification) {
+                                indexItem.child(new UnreadNotificationComponent(this.context.bookTexture(), false));
+                            }
                         } else {
-                            indexItem = this.context.template(ParentComponent.class, "locked-index-item");
+                            hasUnreadNotification = false;
+
+                            indexItem = this.context.template(FlowLayout.class, "locked-index-item");
                             indexItem.childById(LabelComponent.class, "index-label").text(Text.translatable("text.lavender.entry.locked"));
                         }
 
                         int sectionIndex = indexSections.size() - 1;
-                        if (indexSections.get(sectionIndex).children().size() >= (sectionIndex < maxEntriesPerPage.length ? maxEntriesPerPage[sectionIndex] : 12)) {
+                        int entryHeight = entry.canPlayerView(this.context.client.player)
+                                ? Math.max(10, this.lineCount(entry.title(), hasUnreadNotification) * 8)
+                                : 10;
+
+                        if (currentSectionHeight.intValue() + entryHeight >= (sectionIndex < pageSizes.length ? pageSizes[sectionIndex] : 150)) {
                             indexSections.add(Containers.verticalFlow(Sizing.fill(100), Sizing.content()));
+                            currentSectionHeight.setValue(0);
                         }
 
                         Iterables.getLast(indexSections).child(indexItem);
+                        currentSectionHeight.add(entryHeight);
                     });
 
             return indexSections;
+        }
+
+        protected FlowLayout buildCategoryIndex(Stream<Category> categories) {
+            var categoryContainer = Containers.ltrTextFlow(Sizing.fill(100), Sizing.content()).gap(4);
+            categories
+                    .sorted(Comparator.comparingInt(Category::ordinal))
+                    .sorted(Comparator.comparing($ -> !this.context.book.shouldDisplayCategory($, this.context.client.player)))
+                    .forEach(category_ -> {
+                        if (this.context.book.shouldDisplayCategory(category_, this.context.client.player)) {
+                            var icon = category_.iconFactory().apply(Sizing.fixed(16)).configure(categoryButton -> {
+                                categoryButton
+                                        .tooltip(Text.literal(category_.title()))
+                                        .margins(Insets.of(4))
+                                        .cursorStyle(CursorStyle.HAND);
+
+                                categoryButton.mouseDown().subscribe((mouseX, mouseY, button) -> {
+                                    if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+
+                                    this.context.navPush(new CategoryPageSupplier(this.context, category_));
+                                    UISounds.playInteractionSound();
+                                    return true;
+                                });
+                            });
+
+                            if (this.context.book.shouldDisplayUnreadNotification(category_, this.context.client.player)) {
+                                categoryContainer.child(Containers.stack(Sizing.content(), Sizing.content())
+                                        .child(icon)
+                                        .child(new UnreadNotificationComponent(this.context.bookTexture(), true)
+                                                .positioning(Positioning.relative(100, 100))
+                                                .margins(Insets.of(0, 1, 0, 1)))
+                                );
+                            } else {
+                                categoryContainer.child(icon);
+                            }
+                        } else if (!category_.secret()) {
+                            categoryContainer.child(this.context.template(Component.class, "locked-category-button"));
+                        }
+                    });
+
+            return categoryContainer;
+        }
+
+        protected int lineCount(String entryTitle, boolean hasNotification) {
+            return this.context.client.textRenderer.getTextHandler().wrapLines(entryTitle, hasNotification ? 90 : 98, Style.EMPTY.withFont(MinecraftClient.UNICODE_FONT_ID)).size();
         }
 
         public interface Bookmarkable {
@@ -632,32 +747,8 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                 var categories = this.pageWithHeader(Text.translatable("text.lavender.categories"));
                 categories.verticalSizing(Sizing.content());
 
-                var categoryContainer = Containers.ltrTextFlow(Sizing.fill(100), Sizing.content()).gap(4);
+                var categoryContainer = this.buildCategoryIndex(book.categories().stream().filter(category -> category.parent() == null));
                 categories.child(categoryContainer);
-
-                book.categories().stream()
-                        .sorted(Comparator.comparingInt(Category::ordinal))
-                        .sorted(Comparator.comparing($ -> !book.shouldDisplayCategory($, this.context.client.player)))
-                        .forEach(category -> {
-                            if (book.shouldDisplayCategory(category, this.context.client.player)) {
-                                categoryContainer.child(Components.item(category.icon()).<ItemComponent>configure(categoryButton -> {
-                                    categoryButton
-                                            .tooltip(Text.literal(category.title()))
-                                            .margins(Insets.of(4))
-                                            .cursorStyle(CursorStyle.HAND);
-
-                                    categoryButton.mouseDown().subscribe((mouseX, mouseY, button) -> {
-                                        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
-
-                                        this.context.navPush(new CategoryPageSupplier(this.context, category));
-                                        UISounds.playInteractionSound();
-                                        return true;
-                                    });
-                                }));
-                            } else if (!category.secret()) {
-                                categoryContainer.child(this.context.template(Component.class, "locked-category-button"));
-                            }
-                        });
 
                 categoryContainer.child(Components.item(LavenderBookItem.itemOf(this.context.book)).<ItemComponent>configure(categoryButton -> {
                     categoryButton
@@ -682,11 +773,11 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                     : this.context.bookComponentSource.builtinTemplate(Component.class, "horizontal-rule").margins(Insets.vertical(6))
             );
 
-            int entriesOnCategoryPage = book.categories().size() > 0
-                    ? 12 - 3 - MathHelper.ceilDiv(book.categories().size() - 1, 4) * 2
-                    : 12;
+            int entriesOnCategoryPage = !book.categories().isEmpty()
+                    ? 150 - 35 - MathHelper.ceilDiv(book.categories().size() - 1, 4) * 24
+                    : 150;
 
-            var orphanedEntries = this.buildEntryIndex(book.orphanedEntries(), entriesOnCategoryPage);
+            var orphanedEntries = this.buildEntryIndex(book.orphanedEntries(), true, entriesOnCategoryPage);
             indexPage.child(orphanedEntries.remove(0));
             this.pages.addAll(orphanedEntries);
         }
@@ -712,7 +803,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         public IndexPageSupplier(LavenderBookScreen context) {
             super(context);
 
-            var entries = this.buildEntryIndex(this.context.book.entries(), 10);
+            var entries = this.buildEntryIndex(this.context.book.entries(), false, 125);
             this.pages.add(this.pageWithHeader(Text.translatable("text.lavender.index_category.title")).child(entries.remove(0)));
             this.pages.addAll(entries);
         }
@@ -811,13 +902,26 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
             var landingPage = this.pageWithHeader(Text.literal(category.title())).child(landingPageContent);
             this.pages.add(landingPage);
 
-            // --- entry index ---
+            // --- category & entry index ---
+
+            var categoryContainer = this.buildCategoryIndex(this.context.book.categories().stream().filter(category_ -> Objects.equals(category_.parent(), category.id())));
+            int entriesOnCategoryPage = !categoryContainer.children().isEmpty()
+                    ? 125 - 15 - MathHelper.ceilDiv(categoryContainer.children().size(), 4) * 24
+                    : 125;
 
             var entries = this.context.book.entriesByCategory(this.category);
             if (entries != null) {
-                var indexPages = this.buildEntryIndex(entries);
+                var indexPages = this.buildEntryIndex(entries, true, entriesOnCategoryPage);
                 for (int i = 0; i < indexPages.size(); i++) {
-                    this.pages.add(i == 0 ? this.pageWithHeader(Text.translatable("text.lavender.index")).child(indexPages.get(0)) : indexPages.get(i));
+                    var page = i == 0
+                            ? this.pageWithHeader(Text.translatable("text.lavender.index")).child(indexPages.get(0))
+                            : indexPages.get(i);
+
+                    if (i == 0 && !categoryContainer.children().isEmpty()) {
+                        page.child(1, categoryContainer).child(2, this.context.bookComponentSource.builtinTemplate(Component.class, "horizontal-rule").margins(Insets.vertical(6)));
+                    }
+
+                    this.pages.add(page);
                 }
 
                 if (this.context.book.displayCompletion()) {
@@ -892,6 +996,8 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                     this.pages.add(component);
                 }
             }
+
+            LavenderClientStorage.markEntryViewed(this.context.book, entry);
         }
 
         @Override
@@ -937,8 +1043,20 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         }
     }
 
+    @FunctionalInterface
+    public interface FeatureProvider {
+        /**
+         * Create a new set of additional features to insert into the Markdown
+         * processor used for compiling entries of your book. {@code bookComponentSource}
+         * should be used to create components from templates as it has a set of Lavender-specific
+         * template parameters pre-filled
+         */
+        List<MarkdownFeature> createFeatures(BookCompiler.ComponentSource componentSource);
+    }
+
     static {
         UIParsing.registerFactory("lavender.structure", StructureComponent::parse);
+        UIParsing.registerFactory("lavender.unread-notification", UnreadNotificationComponent::parse);
     }
 }
 

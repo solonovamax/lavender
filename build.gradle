@@ -1,7 +1,6 @@
 plugins {
-    id 'fabric-loom' version '1.3-SNAPSHOT'
+    id 'fabric-loom' version '1.6-SNAPSHOT'
     id 'maven-publish'
-    id 'io.github.juuxel.loom-vineflower' version '1.11.0'
 }
 
 version = "${project.mod_version}+${project.minecraft_base_version}"
@@ -42,8 +41,6 @@ repositories {
 
     // modmenu
     maven { url "https://maven.terraformersmc.com/releases/" }
-
-    mavenLocal()
 }
 
 dependencies {
@@ -56,6 +53,7 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
     modImplementation "io.wispforest:owo-lib:${project.owo_version}"
+    include "io.wispforest:owo-sentinel:${project.owo_version}"
 
     modLocalRuntime "me.shedaniel:RoughlyEnoughItems-fabric:${project.rei_version}"
     modCompileOnly "me.shedaniel:RoughlyEnoughItems-api-fabric:${project.rei_version}"

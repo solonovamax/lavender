@@ -5,6 +5,10 @@ import com.google.gson.*;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.wispforest.lavender.Lavender;
+import io.wispforest.owo.ui.component.Components;
+import io.wispforest.owo.ui.container.Containers;
+import io.wispforest.owo.ui.core.Component;
+import io.wispforest.owo.ui.core.Sizing;
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.fabricmc.fabric.api.resource.conditions.v1.ResourceConditions;
@@ -12,7 +16,11 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.command.argument.ItemStringReader;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.tag.TagKey;
 import net.minecraft.registry.Registries;
 import net.minecraft.resource.*;
 import net.minecraft.util.Identifier;
@@ -21,10 +29,9 @@ import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 public class BookContentLoader implements SynchronousResourceReloader, IdentifiableResourceReloadListener {
 
@@ -55,10 +62,16 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
                 var markdown = parseMarkdown(book, identifier, resource);
                 if (markdown == null) return;
 
+                var parentCategory = JsonHelper.getString(markdown.meta, "parent", null);
+                var parentCategoryId = parentCategory != null
+                        ? parentCategory.indexOf(':') > 0 ? Identifier.tryParse(parentCategory) : new Identifier(identifier.getNamespace(), parentCategory)
+                        : null;
+
                 book.addCategory(new Category(
                         identifier,
+                        parentCategoryId,
                         JsonHelper.getString(markdown.meta, "title"),
-                        getIcon(markdown.meta, null),
+                        getIcon(markdown.meta),
                         JsonHelper.getBoolean(markdown.meta, "secret", false),
                         JsonHelper.getInt(markdown.meta, "ordinal", Integer.MAX_VALUE),
                         markdown.content
@@ -77,13 +90,13 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
                         : null;
 
                 var title = JsonHelper.getString(markdown.meta, "title");
-                var icon = getIcon(markdown.meta, ItemStack.EMPTY);
+                var icon = getIcon(markdown.meta);
                 var secret = JsonHelper.getBoolean(markdown.meta, "secret", false);
                 var ordinal = JsonHelper.getInt(markdown.meta, "ordinal", Integer.MAX_VALUE);
 
-                var associatedItems = new ImmutableSet.Builder<Item>();
+                var associatedItems = new ImmutableSet.Builder<ItemStack>();
                 for (var itemElement : JsonHelper.getArray(markdown.meta, "associated_items", new JsonArray())) {
-                    associatedItems.add(JsonHelper.asItem(itemElement, "associated_items entry"));
+                    associatedItems.addAll(itemsFromString(itemElement.getAsString()));
                 }
 
                 var requiredAdvancements = new ImmutableSet.Builder<Identifier>();
@@ -201,10 +214,34 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
     private record MarkdownResource(JsonObject meta, String content) {}
 
-    private static ItemStack getIcon(JsonObject meta, @Nullable ItemStack orElse) {
-        if (!meta.has("icon") && orElse != null) return orElse;
-        var stackString = JsonHelper.getString(meta, "icon");
+    private static Function<Sizing, Component> getIcon(JsonObject meta) {
+        if (meta.has("icon")) {
+            var stackString = JsonHelper.getString(meta, "icon");
+            return sizing -> Components.item(itemStackFromString(stackString)).sizing(sizing);
+        } else {
+            return sizing -> Containers.stack(sizing, sizing);
+        }
+    }
 
+    private static Collection<ItemStack> itemsFromString(String itemsString) {
+        if (!itemsString.startsWith("#")) return List.of(itemStackFromString(itemsString));
+
+        var tagId = Identifier.tryParse(itemsString.substring(1));
+        if (tagId == null) {
+            Lavender.LOGGER.warn("Could not parse tag ID '" + itemsString + "'");
+            return List.of();
+        }
+
+        var entryList = Registries.ITEM.getEntryList(TagKey.of(RegistryKeys.ITEM, tagId));
+        if (entryList.isEmpty()) {
+            Lavender.LOGGER.warn("Unknown item tag: '" + itemsString + "'");
+            return List.of();
+        }
+
+        return entryList.get().stream().map(RegistryEntry::value).map(Item::getDefaultStack).toList();
+    }
+
+    private static ItemStack itemStackFromString(String stackString) {
         try {
             var parsed = ItemStringReader.item(Registries.ITEM.getReadOnlyWrapper(), new StringReader(stackString));
 
@@ -213,7 +250,7 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
             return stack;
         } catch (CommandSyntaxException e) {
-            throw new JsonSyntaxException("Invalid icon string: '" + stackString +  "'", e);
+            throw new JsonSyntaxException("Invalid item stack: '" + stackString +  "'", e);
         }
     }
 }
