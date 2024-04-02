@@ -1,10 +1,8 @@
 package io.wispforest.lavender.book;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
+import com.mojang.serialization.JsonOps;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.lavender.client.BookBakedModel;
 import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
@@ -12,8 +10,11 @@ import net.minecraft.client.util.ModelIdentifier;
 import net.minecraft.registry.Registries;
 import net.minecraft.resource.ResourceFinder;
 import net.minecraft.resource.ResourceManager;
+import net.minecraft.text.Text;
+import net.minecraft.text.TextCodecs;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.JsonHelper;
+import net.minecraft.util.Util;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -72,6 +73,11 @@ public class BookLoader {
             var extendId = tryGetId(bookObject, "extend");
             var dynamicBookModelId = tryGetId(bookObject, "dynamic_book_model");
 
+            Text dynamicBookName = null;
+            if (bookObject.has("dynamic_book_name")) {
+                dynamicBookName = Util.getResult(TextCodecs.CODEC.parse(JsonOps.INSTANCE, bookObject.get("dynamic_book_name")), JsonParseException::new);
+            }
+
             var openSoundId = tryGetId(bookObject, "open_sound");
             var openSoundEvent = openSoundId != null ? Registries.SOUND_EVENT.get(openSoundId) : null;
             var flippingSoundId = tryGetId(bookObject, "flipping_sound");
@@ -83,7 +89,7 @@ public class BookLoader {
             var displayUnreadEntryNotifications = JsonHelper.getBoolean(bookObject, "display_unread_entry_notifications", true);
             var macros = GSON.fromJson(JsonHelper.getObject(bookObject, "macros", new JsonObject()), MACROS_TOKEN);
 
-            var book = new Book(resourceId, extendId, textureId, dynamicBookModelId, openSoundEvent, flippingSoundEvent, introEntryId, displayUnreadEntryNotifications, displayCompletion, macros);
+            var book = new Book(resourceId, extendId, textureId, dynamicBookModelId, dynamicBookName, openSoundEvent, flippingSoundEvent, introEntryId, displayUnreadEntryNotifications, displayCompletion, macros);
             LOADED_BOOKS.put(resourceId, book);
             if (extendId == null) VISIBLE_BOOKS.put(resourceId, book);
         });

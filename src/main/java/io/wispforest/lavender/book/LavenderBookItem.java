@@ -111,6 +111,16 @@ public class LavenderBookItem extends Item {
         }
     }
 
+    @Override
+    public Text getName(ItemStack stack) {
+        if (this.bookId != null) return super.getName(stack);
+
+        var book = bookOf(stack);
+        if (book == null || book.dynamicBookName() == null) return super.getName(stack);
+
+        return book.dynamicBookName();
+    }
+
     /**
      * @return A dynamic book with the correct NBT to represent the given book
      */
