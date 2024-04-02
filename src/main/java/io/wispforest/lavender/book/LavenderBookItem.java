@@ -3,9 +3,8 @@ package io.wispforest.lavender.book;
 import com.google.common.base.Preconditions;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.lavender.client.LavenderBookScreen;
+import io.wispforest.owo.nbt.NbtKey;
 import io.wispforest.owo.ops.TextOps;
-import io.wispforest.owo.serialization.endec.BuiltInEndecs;
-import io.wispforest.owo.serialization.endec.KeyedEndec;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -30,7 +29,7 @@ import java.util.Map;
 
 public class LavenderBookItem extends Item {
 
-    public static final KeyedEndec<Identifier> BOOK_ID = BuiltInEndecs.IDENTIFIER.keyed("BookId", (Identifier) null);
+    public static final NbtKey<Identifier> BOOK_ID = new NbtKey<>("BookId", NbtKey.Type.IDENTIFIER);
     public static final LavenderBookItem DYNAMIC_BOOK = new LavenderBookItem(null, new Settings().maxCount(1));
 
     private static final Map<Identifier, LavenderBookItem> BOOK_ITEMS = new HashMap<>();

@@ -276,7 +276,7 @@
                         <line-spacing>0</line-spacing>
 
                         <sizing>
-                            <horizontal method="expand">100</horizontal>
+                            <horizontal method="fill">80</horizontal>
                         </sizing>
                     </label>
                 </children>

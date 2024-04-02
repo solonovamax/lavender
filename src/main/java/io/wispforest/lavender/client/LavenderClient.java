@@ -123,12 +123,12 @@ public class LavenderClient implements ClientModInitializer {
             currentWorldId = buf.readUuid();
         });
 
-        UIParsing.registerFactory(Lavender.id("ingredient"), element -> {
+        UIParsing.registerFactory("lavender.ingredient", element -> {
             Lavender.LOGGER.warn("Deprecated <ingredient> element used, migrate to <item-list> instead");
             return new ItemListComponent();
         });
 
-        UIParsing.registerFactory(Lavender.id("item-list"), element -> new ItemListComponent());
+        UIParsing.registerFactory("lavender.item-list", element -> new ItemListComponent());
     }
 
     public static UUID currentWorldId() {

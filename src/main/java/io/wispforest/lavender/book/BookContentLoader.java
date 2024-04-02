@@ -216,11 +216,6 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
         if (meta.has("icon")) {
             var stackString = JsonHelper.getString(meta, "icon");
             return sizing -> Components.item(itemStackFromString(stackString)).sizing(sizing);
-        } else if (meta.has("icon_sprite")) {
-            var id = Identifier.tryParse(JsonHelper.getString(meta, "icon_sprite"));
-            if (id == null) return null;
-
-            return sizing -> Components.sprite(MinecraftClient.getInstance().getGuiAtlasManager().getSprite(id)).sizing(sizing);
         } else {
             return sizing -> Containers.stack(sizing, sizing);
         }

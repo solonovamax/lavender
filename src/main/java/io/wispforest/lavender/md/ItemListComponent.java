@@ -101,10 +101,7 @@ public class ItemListComponent extends ItemComponent {
         UIParsing.apply(
                 children,
                 "ingredient",
-                ingredientElement -> Util.getResult(
-                        Ingredient.DISALLOW_EMPTY_CODEC.parse(JsonOps.INSTANCE, GSON.fromJson(ingredientElement.getTextContent().strip(), JsonElement.class)),
-                        RuntimeException::new
-                ),
+                ingredientElement -> Ingredient.fromJson(GSON.fromJson(ingredientElement.getTextContent().strip(), JsonElement.class)),
                 this::ingredient
         );
     }

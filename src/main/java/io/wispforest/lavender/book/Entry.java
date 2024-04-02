@@ -30,7 +30,7 @@ public record Entry(
             var advancement = advancementHandler.getManager().get(advancementId);
             if (advancement == null) return false;
 
-            var progress = ((ClientAdvancementManagerAccessor) advancementHandler).lavender$getAdvancementProgresses().get(advancement.getAdvancementEntry());
+            var progress = ((ClientAdvancementManagerAccessor) advancementHandler).lavender$getAdvancementProgresses().get(advancement);
             if (progress == null || !progress.isDone()) return false;
         }
 

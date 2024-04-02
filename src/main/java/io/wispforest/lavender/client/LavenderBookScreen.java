@@ -251,7 +251,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
 
                 var bookmarkComponent = this.createBookmarkButton("bookmark");
                 bookmarkComponent.tooltip(List.of(Text.literal(element.title()), Text.translatable("text.lavender.book.bookmark.remove_hint")));
-                bookmarkComponent.childById(StackLayout.class, "bookmark-preview").child(element.iconFactory().apply(Sizing.fill()).cursorStyle(CursorStyle.HAND));
+                bookmarkComponent.childById(StackLayout.class, "bookmark-preview").child(element.iconFactory().apply(Sizing.fill(100)).cursorStyle(CursorStyle.HAND));
                 bookmarkComponent.childById(ButtonComponent.class, "bookmark-button").<ButtonComponent>configure(bookmarkButton -> {
                     bookmarkButton.onPress($ -> {
                         if (Screen.hasShiftDown()) {
@@ -428,12 +428,12 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
         mouseX = mouseX * this.window.getScaleFactor() / this.scaleFactor;
         mouseY = mouseY * this.window.getScaleFactor() / this.scaleFactor;
 
-        if (super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) return true;
-        this.turnPage(verticalAmount < 0);
+        if (super.mouseScrolled(mouseX, mouseY, amount)) return true;
+        this.turnPage(amount < 0);
 
         return true;
     }
@@ -616,7 +616,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                             hasUnreadNotification = this.context.book.shouldDisplayUnreadNotification(entry);
 
                             indexItem = this.context.template(FlowLayout.class, "index-item");
-                            indexItem.childById(StackLayout.class, "icon-anchor").child(entry.iconFactory().apply(Sizing.fill()));
+                            indexItem.childById(StackLayout.class, "icon-anchor").child(entry.iconFactory().apply(Sizing.fill(100)));
 
                             var label = indexItem.childById(LabelComponent.class, "index-label");
 
@@ -1055,8 +1055,8 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
     }
 
     static {
-        UIParsing.registerFactory(Lavender.id("structure"), StructureComponent::parse);
-        UIParsing.registerFactory(Lavender.id("unread-notification"), UnreadNotificationComponent::parse);
+        UIParsing.registerFactory("lavender.structure", StructureComponent::parse);
+        UIParsing.registerFactory("lavender.unread-notification", UnreadNotificationComponent::parse);
     }
 }
 
