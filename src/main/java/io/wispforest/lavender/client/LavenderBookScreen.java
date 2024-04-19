@@ -645,7 +645,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
 
                         int sectionIndex = indexSections.size() - 1;
                         int entryHeight = entry.canPlayerView(this.context.client.player)
-                                ? Math.max(10, this.lineCount(entry.title(), hasUnreadNotification) * 8)
+                                ? Math.max(10, this.lineCount(entry.title(), hasUnreadNotification) * 9)
                                 : 10;
 
                         if (currentSectionHeight.intValue() + entryHeight >= (sectionIndex < pageSizes.length ? pageSizes[sectionIndex] : 150)) {
@@ -774,7 +774,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
             );
 
             int entriesOnCategoryPage = !book.categories().isEmpty()
-                    ? 150 - 35 - MathHelper.ceilDiv(book.categories().size() - 1, 4) * 24
+                    ? 150 - 36 - MathHelper.ceilDiv(book.categories().size() - 1, 4) * 24
                     : 150;
 
             var orphanedEntries = this.buildEntryIndex(book.orphanedEntries(), true, entriesOnCategoryPage);
