@@ -17,3 +17,10 @@
 you might not believe it, but this entry actually comes from an extension loaded through a different namespace
 
 <item;minecraft:diamond>
+
+;;;;;
+
+a list:
+- <keybind;key.forward> some text
+- more text
+- text!
