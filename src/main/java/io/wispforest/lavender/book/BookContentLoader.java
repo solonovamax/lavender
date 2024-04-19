@@ -16,12 +16,10 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.command.argument.ItemStringReader;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.TagKey;
-import net.minecraft.registry.Registries;
 import net.minecraft.resource.*;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.JsonHelper;
@@ -216,8 +214,8 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
     private static Function<Sizing, Component> getIcon(JsonObject meta) {
         if (meta.has("icon")) {
-            var stackString = JsonHelper.getString(meta, "icon");
-            return sizing -> Components.item(itemStackFromString(stackString)).sizing(sizing);
+            var stack = itemStackFromString(JsonHelper.getString(meta, "icon"));
+            return sizing -> Components.item(stack).sizing(sizing);
         } else {
             return sizing -> Containers.stack(sizing, sizing);
         }
