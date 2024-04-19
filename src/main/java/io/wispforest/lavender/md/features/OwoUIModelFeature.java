@@ -88,7 +88,7 @@ public class OwoUIModelFeature implements MarkdownFeature {
             try {
                 var model = UIModel.load(new ByteArrayInputStream(this.modelString.getBytes(StandardCharsets.UTF_8)));
                 ((OwoUICompiler) compiler).visitComponent(model.expandTemplate(Component.class, "__model-feature-generated__", Map.of()));
-            } catch (ParserConfigurationException | IOException | SAXException e) {
+            } catch (Exception e) {
                 Lavender.LOGGER.warn("Failed to build owo-ui model markdown element", e);
                 ((OwoUICompiler) compiler).visitComponent(
                         Containers.verticalFlow(Sizing.fill(100), Sizing.content())
