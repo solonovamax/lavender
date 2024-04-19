@@ -936,6 +936,8 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
 
                     landingPage.child(completionBar);
                 }
+            } else {
+                this.pages.add(this.pageWithHeader(Text.translatable("text.lavender.index")).child(categoryContainer).child(this.context.bookComponentSource.builtinTemplate(Component.class, "horizontal-rule").margins(Insets.vertical(6))));
             }
         }
 
