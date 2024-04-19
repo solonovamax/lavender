@@ -214,8 +214,8 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
     private static Function<Sizing, Component> getIcon(JsonObject meta) {
         if (meta.has("icon")) {
-            var stackString = JsonHelper.getString(meta, "icon");
-            return sizing -> Components.item(itemStackFromString(stackString)).sizing(sizing);
+            var stack = itemStackFromString(JsonHelper.getString(meta, "icon"));
+            return sizing -> Components.item(stack).sizing(sizing);
         } else if (meta.has("icon_sprite")) {
             var id = Identifier.tryParse(JsonHelper.getString(meta, "icon_sprite"));
             if (id == null) return null;
