@@ -9,7 +9,8 @@ import io.wispforest.owo.serialization.endec.KeyedEndec;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.item.TooltipContext;
+import net.minecraft.client.item.TooltipType;
+import net.minecraft.component.DataComponentType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -30,7 +31,15 @@ import java.util.Map;
 
 public class LavenderBookItem extends Item {
 
-    public static final KeyedEndec<Identifier> BOOK_ID = BuiltInEndecs.IDENTIFIER.keyed("BookId", (Identifier) null);
+    public static final DataComponentType<Identifier> BOOK_ID = Registry.register(
+            Registries.DATA_COMPONENT_TYPE,
+            Lavender.id("book_id"),
+            DataComponentType.<Identifier>builder()
+                    .codec(Identifier.CODEC)
+                    .packetCodec(Identifier.PACKET_CODEC)
+                    .build()
+    );
+
     public static final LavenderBookItem DYNAMIC_BOOK = new LavenderBookItem(null, new Settings().maxCount(1));
 
     private static final Map<Identifier, LavenderBookItem> BOOK_ITEMS = new HashMap<>();
@@ -126,7 +135,7 @@ public class LavenderBookItem extends Item {
      */
     public static ItemStack createDynamic(Book book) {
         var stack = DYNAMIC_BOOK.getDefaultStack();
-        stack.put(BOOK_ID, book.id());
+        stack.set(BOOK_ID, book.id());
         return stack;
     }
 
@@ -155,7 +164,7 @@ public class LavenderBookItem extends Item {
     }
 
     @Override
-    public void appendTooltip(ItemStack stack, @Nullable World world, List<Text> tooltip, TooltipContext context) {
+    public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
         var bookId = bookIdOf(stack);
         if (bookId == null) {
             tooltip.add(TextOps.withFormatting("⚠ §No associated book", Formatting.RED, Formatting.DARK_GRAY));

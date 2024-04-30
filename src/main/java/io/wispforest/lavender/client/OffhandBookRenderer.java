@@ -59,8 +59,8 @@ public class OffhandBookRenderer {
         }
 
         var modelView = RenderSystem.getModelViewStack();
-        modelView.push();
-        modelView.loadIdentity();
+        modelView.pushMatrix();
+        modelView.identity();
         modelView.translate(0, 0, -2000);
         RenderSystem.applyModelViewMatrix();
 
@@ -73,7 +73,7 @@ public class OffhandBookRenderer {
 
         client.getFramebuffer().beginWrite(false);
 
-        modelView.pop();
+        modelView.popMatrix();
         RenderSystem.applyModelViewMatrix();
 
         // --- draw color attachment in place of map texture ---

@@ -75,7 +75,7 @@ public class BookLoader {
 
             Text dynamicBookName = null;
             if (bookObject.has("dynamic_book_name")) {
-                dynamicBookName = Util.getResult(TextCodecs.CODEC.parse(JsonOps.INSTANCE, bookObject.get("dynamic_book_name")), JsonParseException::new);
+                dynamicBookName = TextCodecs.CODEC.parse(JsonOps.INSTANCE, bookObject.get("dynamic_book_name")).getOrThrow(JsonParseException::new);
             }
 
             var openSoundId = tryGetId(bookObject, "open_sound");

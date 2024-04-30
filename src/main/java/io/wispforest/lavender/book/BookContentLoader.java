@@ -11,7 +11,6 @@ import io.wispforest.owo.ui.core.Component;
 import io.wispforest.owo.ui.core.Sizing;
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
-import net.fabricmc.fabric.api.resource.conditions.v1.ResourceConditions;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.command.argument.ItemStringReader;
 import net.minecraft.item.Item;
@@ -48,6 +47,7 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
     @Override
     public void reload(ResourceManager manager) {
+        if (MinecraftClient.getInstance().world == null) return;
         reloadContents(manager);
     }
 
@@ -167,7 +167,7 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
         if (resourcePath.indexOf('/') != -1) {
             book = resourcePath.substring(0, resourcePath.indexOf('/'));
-            resourcePath = resourcePath.substring(resourcePath.indexOf('/')+ 1);
+            resourcePath = resourcePath.substring(resourcePath.indexOf('/') + 1);
         }
 
         if (resourcePath.indexOf('/') != -1) {
@@ -198,9 +198,10 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
                 meta = GSON.fromJson(content.substring(0, frontmatterEnd), JsonObject.class);
                 content = content.substring(frontmatterEnd + 3).stripLeading();
 
-                return ResourceConditions.objectMatchesConditions(meta)
-                        ? new MarkdownResource(meta, book.expandMacros(resourceId, content.replaceAll("\\r\\n?", "\n")))
-                        : null;
+//                return ResourceConditions.objectMatchesConditions(meta)
+//                        ? new MarkdownResource(meta, book.expandMacros(resourceId, content.replaceAll("\\r\\n?", "\n")))
+//                        : null;
+                return new MarkdownResource(meta, book.expandMacros(resourceId, content.replaceAll("\\r\\n?", "\n")));
             } else {
                 throw new RuntimeException("Missing markdown meta");
             }
@@ -246,14 +247,14 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
     private static ItemStack itemStackFromString(String stackString) {
         try {
-            var parsed = ItemStringReader.item(Registries.ITEM.getReadOnlyWrapper(), new StringReader(stackString));
+            var parsed = new ItemStringReader(MinecraftClient.getInstance().world.getRegistryManager()).consume(new StringReader(stackString));
 
             var stack = parsed.item().value().getDefaultStack();
-            if (parsed.nbt() != null) stack.setNbt(parsed.nbt());
+            if (parsed.components() != null) stack.applyComponentsFrom(parsed.components());
 
             return stack;
         } catch (CommandSyntaxException e) {
-            throw new JsonSyntaxException("Invalid item stack: '" + stackString +  "'", e);
+            throw new JsonSyntaxException("Invalid item stack: '" + stackString + "'", e);
         }
     }
 }

@@ -12,6 +12,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtHelper;
+import net.minecraft.server.function.Macro;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
@@ -148,9 +149,7 @@ public final class Book {
         var candidates = this.entriesByAssociatedItem.get(associatedStack.getItem());
         for (var candidateEntry : candidates) {
             for (var candidateAssociatedStack : candidateEntry.associatedItems()) {
-                if (candidateAssociatedStack.getItem() != associatedStack.getItem()) continue;
-
-                if (NbtHelper.matches(candidateAssociatedStack.getNbt(), associatedStack.getNbt(), true)) {
+                if (ItemStack.areItemsAndComponentsEqual(candidateAssociatedStack, associatedStack)) {
                     return candidateEntry;
                 }
             }

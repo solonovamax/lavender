@@ -150,7 +150,7 @@ public class StructureOverlayRenderer {
                     if (entry.decayTime < 0) {
                         var overlayConsumer = new OverlayVertexConsumer(
                                 effectConsumers.getBuffer(ModelLoader.BLOCK_DESTRUCTION_RENDER_LAYERS.get(5 + (int) (Math.sin(System.currentTimeMillis() / 200d) * 5))),
-                                matrices.peek().getPositionMatrix(), matrices.peek().getNormalMatrix(), 1
+                                matrices.peek(), 1
                         );
 
                         matrices.push();
@@ -204,7 +204,7 @@ public class StructureOverlayRenderer {
 
                     if (entry.decayTime < 0 && complete) {
                         entry.decayTime = 0;
-                        client.player.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.PLAYERS, 1f, 1f);
+                        client.player.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
                     } else if (entry.decayTime >= 0) {
                         entry.decayTime += client.getLastFrameDuration();
                     }

@@ -2,15 +2,20 @@ package io.wispforest.lavender;
 
 import com.mojang.logging.LogUtils;
 import io.wispforest.lavender.book.LavenderBookItem;
+import io.wispforest.owo.serialization.Endec;
+import io.wispforest.owo.serialization.endec.BuiltInEndecs;
+import io.wispforest.owo.serialization.endec.StructEndecBuilder;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
+import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.PersistentState;
@@ -33,11 +38,10 @@ public class Lavender implements ModInitializer {
 
         CommandRegistrationCallback.EVENT.register(LavenderCommands::register);
 
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            var data = PacketByteBufs.create();
-            data.writeUuid(server.getOverworld().getPersistentStateManager().getOrCreate(WorldUUIDState.TYPE, "lavender_world_id").id);
+        PayloadTypeRegistry.playS2C().register(WorldUUIDPayload.ID, WorldUUIDPayload.ENDEC.packetCodec());
 
-            sender.sendPacket(WORLD_ID_CHANNEL, data);
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            sender.sendPacket(new WorldUUIDPayload(server.getOverworld().getPersistentStateManager().getOrCreate(WorldUUIDState.TYPE, "lavender_world_id").id));
         });
     }
 
@@ -60,13 +64,26 @@ public class Lavender implements ModInitializer {
         }
 
         @Override
-        public NbtCompound writeNbt(NbtCompound nbt) {
+        public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
             nbt.putUuid("UUID", id);
             return nbt;
         }
 
-        public static WorldUUIDState read(NbtCompound nbt) {
+        public static WorldUUIDState read(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
             return new WorldUUIDState(nbt.contains("UUID", NbtElement.INT_ARRAY_TYPE) ? nbt.getUuid("UUID") : null);
+        }
+    }
+
+    public record WorldUUIDPayload(UUID worldUuid) implements CustomPayload {
+        public static final CustomPayload.Id<WorldUUIDPayload> ID = new CustomPayload.Id<>(Lavender.id("world_uuid"));
+        public static final Endec<WorldUUIDPayload> ENDEC = StructEndecBuilder.of(
+                BuiltInEndecs.UUID.fieldOf("world_uuid", WorldUUIDPayload::worldUuid),
+                WorldUUIDPayload::new
+        );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
         }
     }
 }

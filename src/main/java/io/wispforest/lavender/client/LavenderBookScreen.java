@@ -86,7 +86,7 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
         var processor = MarkdownProcessor.richText(0)
                 .copyWith(() -> new BookCompiler(this.bookComponentSource))
                 .copyWith(
-                        new ImageFeature(), new BlockStateFeature(), new ItemStackFeature(), new EntityFeature(),
+                        new ImageFeature(), new BlockStateFeature(), new ItemStackFeature(MinecraftClient.getInstance().world.getRegistryManager()), new EntityFeature(),
                         new PageBreakFeature(), new OwoUITemplateFeature(this.bookComponentSource),
                         new RecipeFeature(this.bookComponentSource, RECIPE_HANDLERS.get(this.book.id())),
                         new StructureFeature(this.bookComponentSource), new KeybindFeature(),
