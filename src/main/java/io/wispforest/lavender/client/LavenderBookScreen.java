@@ -210,10 +210,15 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
     }
 
     private void rebuildContent(@Nullable SoundEvent sound) {
-        if (sound != null) this.client.player.playSound(sound, 1f, 1f);
-
         var pageSupplier = this.currentNavFrame().replicator().pageSupplier.apply(this);
         int selectedPage = this.currentNavFrame().selectedPage;
+
+        if (pageSupplier == null) {
+            this.navPop();
+            return;
+        }
+
+        if (sound != null) this.client.player.playSound(sound, 1f, 1f);
 
         if (selectedPage >= pageSupplier.pageCount()) {
             selectedPage = this.currentNavFrame().selectedPage = (pageSupplier.pageCount() - 1) / 2 * 2;
@@ -552,6 +557,10 @@ public class LavenderBookScreen extends BaseUIModelScreen<FlowLayout> implements
                 if (descendant instanceof ItemComponent item) {
                     var entry = this.context.book.entryByAssociatedItem(item.stack());
                     if (entry == null || (this instanceof EntryPageSupplier entrySupplier && entry == entrySupplier.entry)) {
+                        return;
+                    }
+
+                    if (!entry.canPlayerView(this.context.client.player)) {
                         return;
                     }
 
