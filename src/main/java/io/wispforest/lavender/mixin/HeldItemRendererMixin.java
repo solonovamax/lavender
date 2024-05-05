@@ -29,11 +29,11 @@ public abstract class HeldItemRendererMixin {
     }
 
     @Inject(method = "renderFirstPersonMap", at = @At("HEAD"), cancellable = true)
-    private void injectBook(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int swingProgress, ItemStack stack, CallbackInfo ci) {
+    private void injectBook(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, ItemStack stack, CallbackInfo ci) {
         if (!(stack.getItem() instanceof LavenderBookItem)) return;
         ci.cancel();
 
-        OffhandBookRenderer.render(matrices, LavenderBookItem.bookOf(stack));
+        OffhandBookRenderer.render(matrices, light);
     }
 
 }
