@@ -12,6 +12,7 @@
     "ClientAdvancementManagerAccessor",
     "CreativeInventoryScreenMixin",
     "DrawContextMixin",
+    "FramebufferMixin",
     "HeldItemRendererMixin",
     "MinecraftClientMixin",
     "MouseMixin",
