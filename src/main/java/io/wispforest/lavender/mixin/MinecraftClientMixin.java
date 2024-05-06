@@ -1,5 +1,6 @@
 package io.wispforest.lavender.mixin;
 
+import io.wispforest.lavender.book.Book;
 import io.wispforest.lavender.book.LavenderBookItem;
 import io.wispforest.lavender.client.LavenderBookScreen;
 import io.wispforest.lavender.client.OffhandBookRenderer;
@@ -26,17 +27,20 @@ public class MinecraftClientMixin {
 
     @Inject(method = "render", at = @At("HEAD"))
     private void onFrameStart(boolean tick, CallbackInfo ci) {
-        OffhandBookRenderer.beginFrame();
         if (this.player == null) return;
 
+        Book bookToRender = null;
         var offhandStack = this.player.getOffHandStack();
         if (offhandStack.getItem() instanceof LavenderBookItem && LavenderBookItem.bookOf(offhandStack) != null && !(this.currentScreen instanceof LavenderBookScreen)) {
-            OffhandBookRenderer.prepareTexture(LavenderBookItem.bookOf(offhandStack));
+            bookToRender = LavenderBookItem.bookOf(offhandStack);
         }
+
+        OffhandBookRenderer.beginFrame(bookToRender);
     }
 
     @Inject(method = "render", at = @At("TAIL"))
     private void onFrameEnd(boolean tick, CallbackInfo ci) {
+        if (this.player == null) return;
         OffhandBookRenderer.endFrame();
     }
 }

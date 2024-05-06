@@ -16,6 +16,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.resource.ResourceManager;
 import net.minecraft.util.Arm;
 import net.minecraft.util.math.RotationAxis;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -27,12 +28,12 @@ public class OffhandBookRenderer {
         var window = MinecraftClient.getInstance().getWindow();
 
         var framebuffer = new SimpleFramebuffer(window.getFramebufferWidth(), window.getFramebufferHeight(), true, MinecraftClient.IS_SYSTEM_MAC);
+        ((LavenderFramebufferExtension)framebuffer).lavender$setUseCutoutBlit();
         framebuffer.setClearColor(0f, 0f, 0f, 0f);
-        ((LavenderFramebufferExtension)framebuffer).lavender$setBlitProgram(LavenderClient.BLIT_CUTOUT_PROGRAM::program);
         return framebuffer;
     });
 
-    private static final Supplier<Framebuffer> FRAMEBUFFER = Suppliers.memoize(() -> {
+    private static final Supplier<Framebuffer> DISPLAY_BUFFER = Suppliers.memoize(() -> {
         var window = MinecraftClient.getInstance().getWindow();
 
         var framebuffer = new SimpleFramebuffer(window.getFramebufferWidth(), window.getFramebufferHeight(), true, MinecraftClient.IS_SYSTEM_MAC);
@@ -45,17 +46,16 @@ public class OffhandBookRenderer {
 
     public static void initialize() {
         WindowResizeCallback.EVENT.register((client, window) -> {
-            FRAMEBUFFER.get().resize(window.getFramebufferWidth(), window.getFramebufferHeight(), MinecraftClient.IS_SYSTEM_MAC);
+            DISPLAY_BUFFER.get().resize(window.getFramebufferWidth(), window.getFramebufferHeight(), MinecraftClient.IS_SYSTEM_MAC);
             BACK_BUFFER.get().resize(window.getFramebufferWidth(), window.getFramebufferHeight(), MinecraftClient.IS_SYSTEM_MAC);
             cachedScreen = null;
         });
     }
 
-    public static void beginFrame() {
+    public static void beginFrame(@Nullable Book book) {
         cacheExpired = true;
-    }
 
-    public static void prepareTexture(Book book) {
+        if (book == null) return;
         var client = MinecraftClient.getInstance();
 
         rendering = true;
@@ -90,9 +90,9 @@ public class OffhandBookRenderer {
             modelView.pop();
             RenderSystem.applyModelViewMatrix();
 
-            var frontBuffer = FRAMEBUFFER.get();
-            frontBuffer.clear(MinecraftClient.IS_SYSTEM_MAC);
-            frontBuffer.beginWrite(false);
+            var displayBuffer = DISPLAY_BUFFER.get();
+            displayBuffer.clear(MinecraftClient.IS_SYSTEM_MAC);
+            displayBuffer.beginWrite(false);
 
             backBuffer.draw(backBuffer.textureWidth, backBuffer.textureHeight, false);
 
@@ -108,7 +108,7 @@ public class OffhandBookRenderer {
 
         // --- draw color attachment in place of map texture ---
 
-        var framebuffer = FRAMEBUFFER.get();
+        var framebuffer = DISPLAY_BUFFER.get();
 
         var texture = new FramebufferTexture(framebuffer.getColorAttachment());
         client.getTextureManager().registerTexture(Lavender.id("offhand_book_framebuffer"), texture);
@@ -120,7 +120,7 @@ public class OffhandBookRenderer {
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-10));
 
         matrices.scale(1 * (framebuffer.textureWidth / (float) framebuffer.textureHeight), 1f, 1f);
-        matrices.translate(rightHanded ? -.4f : -.6f, -.35f, -.2f);
+        matrices.translate(rightHanded ? -.4f : -.6f, -.35f, -.165f);
 
         var buffer = client.getBufferBuilders().getEntityVertexConsumers().getBuffer(RenderLayer.getText(Lavender.id("offhand_book_framebuffer")));
         var matrix = matrices.peek().getPositionMatrix();
