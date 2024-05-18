@@ -5,8 +5,11 @@ import io.wispforest.owo.ui.component.Components;
 import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.core.*;
+import io.wispforest.owo.ui.util.Delta;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.TooltipComponent;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
@@ -17,6 +20,7 @@ import java.lang.ref.WeakReference;
 
 public class AssociatedEntryTooltipComponent implements TooltipComponent {
 
+    public static float entryTriggerProgress = 0f;
     public static @Nullable WeakReference<ItemStack> tooltipStack = null;
 
     private final FlowLayout layout;
@@ -60,5 +64,12 @@ public class AssociatedEntryTooltipComponent implements TooltipComponent {
     @Override
     public int getWidth(TextRenderer textRenderer) {
         return this.layout.width();
+    }
+
+    static {
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (Screen.hasAltDown()) return;
+            entryTriggerProgress += Delta.compute(entryTriggerProgress, 0f, .125f);
+        });
     }
 }

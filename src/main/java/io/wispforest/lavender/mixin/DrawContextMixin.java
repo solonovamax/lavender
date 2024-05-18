@@ -1,5 +1,7 @@
 package io.wispforest.lavender.mixin;
 
+import com.llamalad7.mixinextras.sugar.Local;
+import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import io.wispforest.lavender.book.LavenderBookItem;
 import io.wispforest.lavender.book.BookLoader;
 import io.wispforest.lavender.client.AssociatedEntryTooltipComponent;
@@ -12,21 +14,20 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.TooltipComponent;
 import net.minecraft.client.gui.tooltip.TooltipPositioner;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.ArrayList;
 import java.util.List;
+
+import static io.wispforest.lavender.client.AssociatedEntryTooltipComponent.entryTriggerProgress;
 
 @Mixin(DrawContext.class)
 public class DrawContextMixin {
 
-    @Unique
-    private static float entryTriggerProgress = 0f;
-
     @Inject(method = "drawTooltip(Lnet/minecraft/client/font/TextRenderer;Ljava/util/List;IILnet/minecraft/client/gui/tooltip/TooltipPositioner;)V", at = @At("HEAD"))
-    private void injectTooltipComponents(TextRenderer textRenderer, List<TooltipComponent> components, int x, int y, TooltipPositioner positioner, CallbackInfo ci) {
+    private void injectTooltipComponents(TextRenderer textRenderer, List<TooltipComponent> components, int x, int y, TooltipPositioner positioner, CallbackInfo ci, @Local(argsOnly = true) LocalRef<List<TooltipComponent>> componentsRef) {
         var client = MinecraftClient.getInstance();
 
         if (AssociatedEntryTooltipComponent.tooltipStack != null && AssociatedEntryTooltipComponent.tooltipStack.get() != null) {
@@ -51,8 +52,11 @@ public class DrawContextMixin {
 
                 if (bookIndex == -1) return;
 
+                components = new ArrayList<>(components);
                 components.add(new AssociatedEntryTooltipComponent(LavenderBookItem.itemOf(book), associatedEntry, entryTriggerProgress));
-                entryTriggerProgress += Delta.compute(entryTriggerProgress, Screen.hasAltDown() ? 1.35f : 0f, client.getLastFrameDuration() * .125);
+                componentsRef.set(components);
+
+                entryTriggerProgress += Delta.compute(entryTriggerProgress, Screen.hasAltDown() ? 1.35f : 0f, client.getLastFrameDuration() * .125f);
 
                 if (entryTriggerProgress >= .95) {
                     LavenderBookScreen.pushEntry(book, associatedEntry);
@@ -68,7 +72,5 @@ public class DrawContextMixin {
                 return;
             }
         }
-
-        entryTriggerProgress += Delta.compute(entryTriggerProgress, 0f, client.getLastFrameDuration() * .125);
     }
 }
