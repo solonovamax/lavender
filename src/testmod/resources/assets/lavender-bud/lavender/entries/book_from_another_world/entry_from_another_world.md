@@ -2,7 +2,10 @@
 {
   "title": "Entry from Another World",
   "icon_sprite": "minecraft:social_interactions/mute_button",
-  "category": "lavender-flower:epic_category",
+  "categories": [
+    "lavender-flower:epic_category",
+    "lavender-flower:a_category"
+  ],
   "ordinal": -1,
   "associated_items": [
     "minecraft:diamond",

@@ -82,10 +82,16 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
                 var markdown = parseMarkdown(book, identifier, resource);
                 if (markdown == null) return;
 
-                var category = JsonHelper.getString(markdown.meta, "category", null);
-                var categoryId = category != null
-                        ? category.indexOf(':') > 0 ? Identifier.tryParse(category) : new Identifier(identifier.getNamespace(), category)
-                        : null;
+                var entryCategories = new ArrayList<Identifier>();
+                for (var categoryElement : JsonHelper.getArray(markdown.meta, "categories", new JsonArray())) {
+                    var categoryString = categoryElement.getAsString();
+                    entryCategories.add(categoryString.indexOf(':') > 0 ? Identifier.tryParse(categoryString) : new Identifier(identifier.getNamespace(), categoryString));
+                }
+
+                var legacyCategory = JsonHelper.getString(markdown.meta, "category", null);
+                if (legacyCategory != null) {
+                    entryCategories.add(legacyCategory.indexOf(':') > 0 ? Identifier.tryParse(legacyCategory) : new Identifier(identifier.getNamespace(), legacyCategory));
+                }
 
                 var title = JsonHelper.getString(markdown.meta, "title");
                 var icon = getIcon(markdown.meta);
@@ -110,7 +116,7 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
                     requiredAdvancements.add(advancementId);
                 }
 
-                var entry = new Entry(identifier, categoryId, title, icon, secret, ordinal, requiredAdvancements.build(), associatedItems.build(), markdown.content);
+                var entry = new Entry(identifier, entryCategories, title, icon, secret, ordinal, requiredAdvancements.build(), associatedItems.build(), markdown.content);
                 if (entry.id().getPath().equals("landing_page")) {
                     book.setLandingPage(entry);
                 } else {

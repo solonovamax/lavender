@@ -11,8 +11,6 @@ import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtHelper;
-import net.minecraft.server.function.Macro;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
@@ -257,7 +255,7 @@ public final class Book {
 
         int scans = 0;
         boolean anyExpansions = true;
-        while (scans < 1000  && anyExpansions) {
+        while (scans < 1000 && anyExpansions) {
             anyExpansions = false;
 
             for (var pattern : this.zeroArgMacros.keySet()) {
@@ -320,14 +318,18 @@ public final class Book {
             this.entriesById.put(entry.id(), entry);
             entry.associatedItems().forEach(stack -> this.entriesByAssociatedItem.put(stack.getItem(), entry));
 
-            if (this.categories.containsKey(entry.category())) {
-                this.entriesByCategory
-                        .computeIfAbsent(this.categories.get(entry.category()), $ -> new ArrayList<>())
-                        .add(entry);
-            } else if (entry.category() == null) {
-                this.orphanedEntries.add(entry);
+            if (!entry.categories().isEmpty()) {
+                for (var category : entry.categories()) {
+                    if (this.categories.containsKey(category)) {
+                        this.entriesByCategory
+                                .computeIfAbsent(this.categories.get(category), $ -> new ArrayList<>())
+                                .add(entry);
+                    } else {
+                        throw new RuntimeException("Could not load entry '" + entry.id() + "' because category '" + category + "' was not found in book '" + this.effectiveId() + "'");
+                    }
+                }
             } else {
-                throw new RuntimeException("Could not load entry '" + entry.id() + "' because category '" + entry.category() + "' was not found in book '" + this.effectiveId() + "'");
+                this.orphanedEntries.add(entry);
             }
         }
     }

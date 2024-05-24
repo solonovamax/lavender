@@ -7,13 +7,13 @@ import io.wispforest.owo.ui.core.Sizing;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
-import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.function.Function;
 
 public record Entry(
         Identifier id,
-        @Nullable Identifier category,
+        List<Identifier> categories,
         String title,
         Function<Sizing, Component> iconFactory,
         boolean secret,
