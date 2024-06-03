@@ -1,23 +1,24 @@
 {
-    "$schema":     "http://json-schema.org/draft-06/schema#",
-    "definitions": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title":   "Lavender Category",
+    "$defs":   {
         "category": {
             "type":       "object",
             "properties": {
                 "parent":  {
                     "title":       "Parent",
                     "description": "The parent of this category",
-                    "$ref":        "lavender-common.json#/definitions/identifier_or_partial"
+                    "$ref":        "lavender-common.json#/$defs/identifier_or_partial"
                 },
                 "title":   {
                     "title":       "Title",
                     "description": "The title of this category, to be displayed at the top of its landing page",
-                    "$ref":        "lavender-common.json#/definitions/text"
+                    "$ref":        "lavender-common.json#/$defs/text"
                 },
                 "icon":    {
                     "title":       "Icon",
                     "description": "An item to use as this category's icon in the index (optionally including NBT)",
-                    "$ref":        "lavender-common.json#/definitions/itemstack"
+                    "$ref":        "lavender-common.json#/$defs/itemstack"
                 },
                 "secret":  {
                     "title":       "Secret",
@@ -36,6 +37,5 @@
             ]
         }
     },
-    "title":       "Lavender Category",
-    "$ref":        "#/definitions/category"
+    "$ref":    "#/$defs/category"
 }
