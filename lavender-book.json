@@ -1,0 +1,48 @@
+{
+    "$schema":     "http://json-schema.org/draft-06/schema#",
+    "definitions": {
+        "book":   {
+            "type":       "object",
+            "properties": {
+                "texture":                            {
+                    "$ref": "lavender-common.json#/definitions/identifier"
+                },
+                "extend":                             {
+                    "$ref": "lavender-common.json#/definitions/identifier"
+                },
+                "dynamic_book_model":                 {
+                    "$ref": "lavender-common.json#/definitions/identifier"
+                },
+                "dynamic_book_name":                  {
+                    "$ref": "lavender-common.json#/definitions/text"
+                },
+                "open_sound":                         {
+                    "$ref": "lavender-common.json#/definitions/identifier"
+                },
+                "flipping_sound":                     {
+                    "$ref": "lavender-common.json#/definitions/identifier"
+                },
+                "intro_entry":                        {
+                    "$ref": "lavender-common.json#/definitions/identifier"
+                },
+                "display_completion":                 {
+                    "type":    "boolean",
+                    "default": false
+                },
+                "display_unread_entry_notifications": {
+                    "type":    "boolean",
+                    "default": true
+                },
+                "macros":                             {
+                    "$ref": "#/definitions/macros"
+                }
+            }
+        },
+        "macros": {
+            "type":                 "object",
+            "additionalProperties": true
+        }
+    },
+    "title":       "Lavender Book",
+    "$ref":        "#/definitions/book"
+}

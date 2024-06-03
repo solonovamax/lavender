@@ -1,0 +1,37 @@
+{
+    "$schema":     "http://json-schema.org/draft-06/schema#",
+    "definitions": {
+        "partial_identifier":    {
+            "type":    "string",
+            "pattern": "^[a-z0-9/._-]+$"
+        },
+        "identifier":            {
+            "type":    "string",
+            "pattern": "^[a-z0-9_\\.-]+:[a-z0-9/\\._-]+$"
+        },
+        "identifier_or_partial": {
+            "anyOf": [
+                { "$ref": "#/definitions/partial_identifier" },
+                { "$ref": "#/definitions/identifier" }
+            ]
+        },
+        "text":                  {
+            "type": "string"
+        },
+        "tag":                   {
+            "type":    "string",
+            "pattern": "^#([a-z0-9_\\.-]+:)?[a-z0-9/\\._-]+$"
+        },
+        "itemstack":             {
+            "type":    "string",
+            "pattern": "^[a-z0-9_\\.-]+:[a-z0-9/\\._-]+(\\{.*\\})?$"
+        },
+        "itemstacks":            {
+            "anyOf": [
+                { "$ref": "#/definitions/itemstack" },
+                { "$ref": "#/definitions/tag" }
+            ]
+        }
+    },
+    "title":       "Lavender Common Definitions"
+}
