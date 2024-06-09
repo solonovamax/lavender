@@ -44,6 +44,7 @@ import java.util.UUID;
 public class LavenderClient implements ClientModInitializer {
 
     public static final BlitCutoutProgram BLIT_CUTOUT_PROGRAM = new BlitCutoutProgram();
+    public static final BlitAlphaProgram BLIT_ALPHA_PROGRAM = new BlitAlphaProgram();
 
     private static final Int2ObjectMap<Size> TEXTURE_SIZES = new Int2ObjectOpenHashMap<>();
     private static final Identifier ENTRY_HUD_ID = Lavender.id("entry_hud");

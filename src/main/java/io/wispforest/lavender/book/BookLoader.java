@@ -37,7 +37,7 @@ public class BookLoader {
             context.addModels(BookBakedModel.Unbaked.BROWN_BOOK_ID);
             for (var book : VISIBLE_BOOKS.values()) {
                 if (book.dynamicBookModel() == null) return;
-                context.addModels(new ModelIdentifier(book.dynamicBookModel(), "inventory"));
+                context.addModels(book.dynamicBookModel());
             }
         });
     }

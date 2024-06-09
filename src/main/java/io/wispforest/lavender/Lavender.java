@@ -1,10 +1,11 @@
 package io.wispforest.lavender;
 
 import com.mojang.logging.LogUtils;
+import io.wispforest.endec.Endec;
+import io.wispforest.endec.impl.BuiltInEndecs;
+import io.wispforest.endec.impl.StructEndecBuilder;
 import io.wispforest.lavender.book.LavenderBookItem;
-import io.wispforest.owo.serialization.Endec;
-import io.wispforest.owo.serialization.endec.BuiltInEndecs;
-import io.wispforest.owo.serialization.endec.StructEndecBuilder;
+import io.wispforest.owo.serialization.CodecUtils;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -38,7 +39,7 @@ public class Lavender implements ModInitializer {
 
         CommandRegistrationCallback.EVENT.register(LavenderCommands::register);
 
-        PayloadTypeRegistry.playS2C().register(WorldUUIDPayload.ID, WorldUUIDPayload.ENDEC.packetCodec());
+        PayloadTypeRegistry.playS2C().register(WorldUUIDPayload.ID, CodecUtils.packetCodec(WorldUUIDPayload.ENDEC));
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             sender.sendPacket(new WorldUUIDPayload(server.getOverworld().getPersistentStateManager().getOrCreate(WorldUUIDState.TYPE, "lavender_world_id").id));
@@ -46,7 +47,7 @@ public class Lavender implements ModInitializer {
     }
 
     public static Identifier id(String path) {
-        return new Identifier(MOD_ID, path);
+        return Identifier.of(MOD_ID, path);
     }
 
     public static class WorldUUIDState extends PersistentState {

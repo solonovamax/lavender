@@ -34,7 +34,7 @@ loom {
 }
 
 repositories {
-    maven { url "https://maven.wispforest.io/" }
+    maven { url "https://maven.wispforest.io/releases/" }
 
     // rei
     maven { url "https://maven.shedaniel.me/" }
@@ -55,7 +55,7 @@ dependencies {
     modImplementation "io.wispforest:owo-lib:${project.owo_version}"
     include "io.wispforest:owo-sentinel:${project.owo_version}"
 
-    modLocalRuntime "me.shedaniel:RoughlyEnoughItems-fabric:${project.rei_version}"
+//    modLocalRuntime "me.shedaniel:RoughlyEnoughItems-fabric:${project.rei_version}"
     modCompileOnly "me.shedaniel:RoughlyEnoughItems-api-fabric:${project.rei_version}"
 
     include modApi("io.wispforest.lavender-md:core:${project.lavender_md_version}")
@@ -80,10 +80,10 @@ processResources {
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    // Minecraft 1.18 (1.18-pre2) upwards uses Java 17.
-    it.options.release = 17
-}
+//tasks.withType(JavaCompile).configureEach {
+//    // Minecraft 1.18 (1.18-pre2) upwards uses Java 17.
+//    it.options.release = 17
+//}
 
 java {
     // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
@@ -91,8 +91,8 @@ java {
     // If you remove this line, sources will not be generated.
     withSourcesJar()
 
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 jar {

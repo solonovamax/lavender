@@ -62,7 +62,7 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
 
                 var parentCategory = JsonHelper.getString(markdown.meta, "parent", null);
                 var parentCategoryId = parentCategory != null
-                        ? parentCategory.indexOf(':') > 0 ? Identifier.tryParse(parentCategory) : new Identifier(identifier.getNamespace(), parentCategory)
+                        ? parentCategory.indexOf(':') > 0 ? Identifier.tryParse(parentCategory) : Identifier.of(identifier.getNamespace(), parentCategory)
                         : null;
 
                 book.addCategory(new Category(
@@ -85,12 +85,12 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
                 var entryCategories = new ArrayList<Identifier>();
                 for (var categoryElement : JsonHelper.getArray(markdown.meta, "categories", new JsonArray())) {
                     var categoryString = categoryElement.getAsString();
-                    entryCategories.add(categoryString.indexOf(':') > 0 ? Identifier.tryParse(categoryString) : new Identifier(identifier.getNamespace(), categoryString));
+                    entryCategories.add(categoryString.indexOf(':') > 0 ? Identifier.tryParse(categoryString) : Identifier.of(identifier.getNamespace(), categoryString));
                 }
 
                 var legacyCategory = JsonHelper.getString(markdown.meta, "category", null);
                 if (legacyCategory != null) {
-                    entryCategories.add(legacyCategory.indexOf(':') > 0 ? Identifier.tryParse(legacyCategory) : new Identifier(identifier.getNamespace(), legacyCategory));
+                    entryCategories.add(legacyCategory.indexOf(':') > 0 ? Identifier.tryParse(legacyCategory) : Identifier.of(identifier.getNamespace(), legacyCategory));
                 }
 
                 var title = JsonHelper.getString(markdown.meta, "title");
@@ -148,14 +148,14 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
             var bookResourcePath = getBookResourcePath(path, targetBook, null);
             if (bookResourcePath == null) return;
 
-            discoveredResources.put(new Identifier(book.id().getNamespace(), bookResourcePath), resource);
+            discoveredResources.put(Identifier.of(book.id().getNamespace(), bookResourcePath), resource);
         });
 
         resources.get(book.id().getNamespace()).forEach((path, resource) -> {
             var bookResourcePath = getBookResourcePath(path, targetBook, activeLanguage);
             if (bookResourcePath == null) return;
 
-            discoveredResources.put(new Identifier(book.id().getNamespace(), bookResourcePath), resource);
+            discoveredResources.put(Identifier.of(book.id().getNamespace(), bookResourcePath), resource);
         });
 
         discoveredResources.forEach((resourceId, resource) -> {
@@ -256,7 +256,7 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
             var parsed = new ItemStringReader(MinecraftClient.getInstance().world.getRegistryManager()).consume(new StringReader(stackString));
 
             var stack = parsed.item().value().getDefaultStack();
-            if (parsed.components() != null) stack.applyComponentsFrom(parsed.components());
+            if (parsed.components() != null) stack.applyUnvalidatedChanges(parsed.components());
 
             return stack;
         } catch (CommandSyntaxException e) {

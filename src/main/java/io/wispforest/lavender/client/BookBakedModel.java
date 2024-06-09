@@ -50,7 +50,7 @@ public class BookBakedModel extends ForwardingBakedModel {
 
     public static class Unbaked implements UnbakedModel {
 
-        public static final ModelIdentifier BROWN_BOOK_ID = new ModelIdentifier(Lavender.id("brown_book"), "inventory");
+        public static final Identifier BROWN_BOOK_ID = Lavender.id("item/brown_book");
 
         @Override
         public Collection<Identifier> getModelDependencies() {
@@ -59,11 +59,12 @@ public class BookBakedModel extends ForwardingBakedModel {
 
         @Nullable
         @Override
-        public BakedModel bake(Baker baker, Function<SpriteIdentifier, Sprite> textureGetter, ModelBakeSettings rotationContainer, Identifier modelId) {
+        public BakedModel bake(Baker baker, Function<SpriteIdentifier, Sprite> textureGetter, ModelBakeSettings rotationContainer) {
             return new BookBakedModel(baker.bake(BROWN_BOOK_ID, rotationContainer));
         }
 
         @Override
         public void setParents(Function<Identifier, UnbakedModel> modelLoader) {}
+
     }
 }

@@ -7,6 +7,7 @@ import io.wispforest.lavender.pond.LavenderFramebufferExtension;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.ShaderProgram;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
 import java.util.function.Supplier;
@@ -14,18 +15,18 @@ import java.util.function.Supplier;
 @Mixin(Framebuffer.class)
 public class FramebufferMixin implements LavenderFramebufferExtension {
 
-    private boolean useCutoutBlit = false;
+    @Unique
+    private Supplier<ShaderProgram> blitProgram = null;
 
     @Override
-    public void lavender$setUseCutoutBlit() {
-        this.useCutoutBlit = true;
+    public void lavender$setBlitProgram(Supplier<ShaderProgram> blitProgram) {
+        this.blitProgram = blitProgram;
     }
 
     @ModifyExpressionValue(method = "drawInternal", at = @At(value = "FIELD", target = "Lnet/minecraft/client/render/GameRenderer;blitScreenProgram:Lnet/minecraft/client/gl/ShaderProgram;"))
     private ShaderProgram applyBlitProgram(ShaderProgram original) {
-        if (!this.useCutoutBlit) return original;
+        if (this.blitProgram == null) return original;
 
-        GlStateManager._colorMask(true, true, true, true);
-        return LavenderClient.BLIT_CUTOUT_PROGRAM.program();
+        return this.blitProgram.get();
     }
 }

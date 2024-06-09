@@ -196,9 +196,9 @@ public class RecipeFeature implements MarkdownFeature {
         }
 
         default void populateIngredientsGrid(RecipeEntry<R> recipe, List<Ingredient> ingredients, ParentComponent componentContainer, int gridWidth, int gridHeight) {
-            ((RecipeGridAligner<Ingredient>) (inputs, slot, amount, gridX, gridY) -> {
+            ((RecipeGridAligner<Ingredient>) (input, slot, amount, gridX, gridY) -> {
                 if (!(componentContainer.children().get(slot) instanceof ItemListComponent ingredient)) return;
-                ingredient.ingredient(inputs.next());
+                ingredient.ingredient(input);
             }).alignRecipeToGrid(gridWidth, gridHeight, 9, recipe, ingredients.iterator(), 0);
         }
     }

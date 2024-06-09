@@ -1,6 +1,7 @@
 package io.wispforest.lavender.client;
 
 import com.google.common.base.Suppliers;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.lavender.book.Book;
@@ -28,7 +29,10 @@ public class OffhandBookRenderer {
         var window = MinecraftClient.getInstance().getWindow();
 
         var framebuffer = new SimpleFramebuffer(window.getFramebufferWidth(), window.getFramebufferHeight(), true, MinecraftClient.IS_SYSTEM_MAC);
-        ((LavenderFramebufferExtension)framebuffer).lavender$setUseCutoutBlit();
+        ((LavenderFramebufferExtension) framebuffer).lavender$setBlitProgram(() -> {
+            GlStateManager._colorMask(true, true, true, true);
+            return LavenderClient.BLIT_CUTOUT_PROGRAM.program();
+        });
         framebuffer.setClearColor(0f, 0f, 0f, 0f);
         return framebuffer;
     });
@@ -125,10 +129,10 @@ public class OffhandBookRenderer {
         var buffer = client.getBufferBuilders().getEntityVertexConsumers().getBuffer(RenderLayer.getText(Lavender.id("offhand_book_framebuffer")));
         var matrix = matrices.peek().getPositionMatrix();
 
-        buffer.vertex(matrix, 0, 1, 0).color(1f, 1f, 1f, 1f).texture(0, 1).light(light).next();
-        buffer.vertex(matrix, 0, 0, 0).color(1f, 1f, 1f, 1f).texture(0, 0).light(light).next();
-        buffer.vertex(matrix, 1, 0, 0).color(1f, 1f, 1f, 1f).texture(1, 0).light(light).next();
-        buffer.vertex(matrix, 1, 1, 0).color(1f, 1f, 1f, 1f).texture(1, 1).light(light).next();
+        buffer.vertex(matrix, 0, 1, 0).color(1f, 1f, 1f, 1f).texture(0, 1).light(light);
+        buffer.vertex(matrix, 0, 0, 0).color(1f, 1f, 1f, 1f).texture(0, 0).light(light);
+        buffer.vertex(matrix, 1, 0, 0).color(1f, 1f, 1f, 1f).texture(1, 0).light(light);
+        buffer.vertex(matrix, 1, 1, 0).color(1f, 1f, 1f, 1f).texture(1, 1).light(light);
 
         client.getBufferBuilders().getEntityVertexConsumers().draw();
 

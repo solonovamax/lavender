@@ -4,16 +4,14 @@ import com.google.common.base.Preconditions;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.lavender.client.LavenderBookScreen;
 import io.wispforest.owo.ops.TextOps;
-import io.wispforest.owo.serialization.endec.BuiltInEndecs;
-import io.wispforest.owo.serialization.endec.KeyedEndec;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.item.TooltipType;
-import net.minecraft.component.DataComponentType;
+import net.minecraft.component.ComponentType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.text.Text;
@@ -31,10 +29,10 @@ import java.util.Map;
 
 public class LavenderBookItem extends Item {
 
-    public static final DataComponentType<Identifier> BOOK_ID = Registry.register(
+    public static final ComponentType<Identifier> BOOK_ID = Registry.register(
             Registries.DATA_COMPONENT_TYPE,
             Lavender.id("book_id"),
-            DataComponentType.<Identifier>builder()
+            ComponentType.<Identifier>builder()
                     .codec(Identifier.CODEC)
                     .packetCodec(Identifier.PACKET_CODEC)
                     .build()
