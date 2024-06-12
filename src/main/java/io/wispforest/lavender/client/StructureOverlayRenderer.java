@@ -1,6 +1,7 @@
 package io.wispforest.lavender.client;
 
 import com.google.common.base.Suppliers;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.lavender.structure.BlockStatePredicate;
@@ -53,6 +54,7 @@ public class StructureOverlayRenderer {
     });
 
     private static final Map<BlockPos, OverlayEntry> ACTIVE_OVERLAYS = new HashMap<>();
+    private static final BasicVertexConsumerProvider CONSUMERS = new BasicVertexConsumerProvider(4096);
 
     private static @Nullable OverlayEntry PENDING_OVERLAY = null;
 
@@ -122,133 +124,136 @@ public class StructureOverlayRenderer {
         Hud.add(HUD_COMPONENT_ID, () -> Containers.verticalFlow(Sizing.content(), Sizing.content()).gap(15).positioning(Positioning.relative(5, 100)));
 
         WorldRenderEvents.LAST.register(context -> {
-            if (!(Hud.getComponent(HUD_COMPONENT_ID) instanceof FlowLayout hudComponent)) {
-                return;
-            }
-
-            var matrices = context.matrixStack();
-            matrices.push();
-
-            matrices.translate(-context.camera().getPos().x, -context.camera().getPos().y, -context.camera().getPos().z);
-
-            var client = MinecraftClient.getInstance();
-            var effectConsumers = client.getBufferBuilders().getEffectVertexConsumers();
-            var testPos = new BlockPos.Mutable();
-
-            hudComponent.<FlowLayout>configure(layout -> {
-                layout.clearChildren().padding(Insets.bottom((client.getWindow().getScaledWidth() - 182) / 2 < 200 ? 50 : 5));
-
-                ACTIVE_OVERLAYS.keySet().removeIf(anchor -> {
-                    var entry = ACTIVE_OVERLAYS.get(anchor);
-                    var structure = entry.fetchStructure();
-                    if (structure == null) return true;
-
-                    // --- overlay rendering ---
-
-                    var hasInvalidBlock = new MutableBoolean();
-
-                    if (entry.decayTime < 0) {
-                        var overlayConsumer = new OverlayVertexConsumer(
-                                effectConsumers.getBuffer(ModelLoader.BLOCK_DESTRUCTION_RENDER_LAYERS.get(5 + (int) (Math.sin(System.currentTimeMillis() / 200d) * 5))),
-                                matrices.peek(), 1
-                        );
-
-                        matrices.push();
-                        matrices.translate(anchor.getX(), anchor.getY(), anchor.getZ());
-
-                        structure.forEachPredicate((pos, predicate) -> {
-                            var state = context.world().getBlockState(testPos.set(anchor).move(pos)).rotate(StructureTemplate.inverse(entry.rotation));
-                            var result = predicate.test(state);
-
-                            if (result == BlockStatePredicate.Result.STATE_MATCH) {
-                                return;
-                            } else if (!state.isAir() && result == BlockStatePredicate.Result.NO_MATCH) {
-                                hasInvalidBlock.setTrue();
-
-                                matrices.push();
-                                matrices.translate(pos.getX(), pos.getY(), pos.getZ());
-                                client.getBlockRenderManager().renderDamage(state, testPos, context.world(), matrices, overlayConsumer);
-                                matrices.pop();
-                            }
-
-                            if (entry.visibleLayer != -1 && pos.getY() != entry.visibleLayer) return;
-                            renderOverlayBlock(matrices, context.consumers(), pos, predicate, entry.rotation);
-
-                        }, entry.rotation);
-
-                        matrices.pop();
-                    }
-
-                    // --- hud setup ---
-
-                    var valid = structure.countValidStates(client.world, anchor, entry.rotation, BlockStatePredicate.MatchCategory.NON_AIR);
-                    var total = structure.predicatesOfType(BlockStatePredicate.MatchCategory.NON_AIR);
-                    var complete = structure.validate(client.world, anchor, entry.rotation);
-
-                    if (entry.decayTime >= 0) valid = total;
-
-                    int barTextureOffset = 0;
-                    if (hasInvalidBlock.booleanValue()) barTextureOffset = 20;
-                    if (complete) barTextureOffset = 10;
-
-                    entry.visualCompleteness += Delta.compute(entry.visualCompleteness, valid / (float) total, client.getLastFrameDuration());
-                    layout.child(Containers.verticalFlow(Sizing.content(), Sizing.content())
-                            .child(Components.label(Text.translatable("text.lavender.structure_hud.completion", Text.translatable(Util.createTranslationKey("structure", entry.structureId)), valid, total)).shadow(true))
-                            .child(Containers.verticalFlow(Sizing.content(), Sizing.content())
-                                    .child(Components.texture(BARS_TEXTURE, 0, barTextureOffset, 182, 5, 256, 48))
-                                    .child(Components.texture(BARS_TEXTURE, 0, barTextureOffset + 5, Math.round(182 * entry.visualCompleteness), 5, 256, 48).positioning(Positioning.absolute(0, 0)))
-                                    .child(Components.texture(BARS_TEXTURE, 0, 30, 182, 5, 256, 48).blend(true).positioning(Positioning.absolute(0, 0))))
-                            .gap(2)
-                            .horizontalAlignment(HorizontalAlignment.CENTER)
-                            .margins(Insets.bottom((int) (Easing.CUBIC.apply((Math.max(0, entry.decayTime - 30) + client.getTickDelta()) / 20f) * -32))));
-
-                    if (entry.decayTime < 0 && complete) {
-                        entry.decayTime = 0;
-                        client.player.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
-                    } else if (entry.decayTime >= 0) {
-                        entry.decayTime += client.getLastFrameDuration();
-                    }
-
-                    return entry.decayTime >= 50;
-                });
-            });
-
-            if (PENDING_OVERLAY != null) {
-                var structure = PENDING_OVERLAY.fetchStructure();
-                if (structure != null) {
-                    if (client.player.raycast(5, client.getTickDelta(), false) instanceof BlockHitResult target) {
-                        var targetPos = target.getBlockPos().add(getPendingOffset(structure));
-                        if (!client.player.isSneaking()) targetPos = targetPos.offset(target.getSide());
-
-                        matrices.translate(targetPos.getX(), targetPos.getY(), targetPos.getZ());
-                        structure.forEachPredicate((pos, predicate) -> renderOverlayBlock(matrices, context.consumers(), pos, predicate, PENDING_OVERLAY.rotation), PENDING_OVERLAY.rotation);
-                    }
-                } else {
-                    PENDING_OVERLAY = null;
+            RenderSystem.runAsFancy(() -> {
+                if (!(Hud.getComponent(HUD_COMPONENT_ID) instanceof FlowLayout hudComponent)) {
+                    return;
                 }
-            }
 
-            matrices.pop();
+                var matrices = context.matrixStack();
+                matrices.push();
 
-            var framebuffer = FRAMEBUFFER.get();
-            framebuffer.clear(MinecraftClient.IS_SYSTEM_MAC);
-            framebuffer.beginWrite(false);
+                matrices.translate(-context.camera().getPos().x, -context.camera().getPos().y, -context.camera().getPos().z);
 
-            GL30C.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER, client.getFramebuffer().fbo);
-            GL30C.glBlitFramebuffer(0, 0, framebuffer.textureWidth, framebuffer.textureHeight, 0, 0, client.getFramebuffer().textureWidth, client.getFramebuffer().textureHeight, GL30C.GL_DEPTH_BUFFER_BIT, GL30C.GL_NEAREST);
+                var client = MinecraftClient.getInstance();
+                var effectConsumers = client.getBufferBuilders().getEffectVertexConsumers();
+                var testPos = new BlockPos.Mutable();
 
-            if (context.consumers() instanceof VertexConsumerProvider.Immediate immediate) immediate.draw();
-            effectConsumers.draw();
-            client.getFramebuffer().beginWrite(false);
+                var framebuffer = FRAMEBUFFER.get();
+                framebuffer.clear(MinecraftClient.IS_SYSTEM_MAC);
+                framebuffer.beginWrite(false);
 
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
+                GL30C.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER, client.getFramebuffer().fbo);
+                GL30C.glBlitFramebuffer(0, 0, framebuffer.textureWidth, framebuffer.textureHeight, 0, 0, client.getFramebuffer().textureWidth, client.getFramebuffer().textureHeight, GL30C.GL_DEPTH_BUFFER_BIT, GL30C.GL_NEAREST);
 
-            RenderSystem.backupProjectionMatrix();
-            client.gameRenderer.blitScreenProgram.colorModulator.set(new float[]{1, 1, 1, .5f});
-            framebuffer.draw(framebuffer.textureWidth, framebuffer.textureHeight, false);
-            client.gameRenderer.blitScreenProgram.colorModulator.set(new float[]{1, 1, 1, 1});
-            RenderSystem.restoreProjectionMatrix();
+                hudComponent.<FlowLayout>configure(layout -> {
+                    layout.clearChildren().padding(Insets.bottom((client.getWindow().getScaledWidth() - 182) / 2 < 200 ? 50 : 5));
+
+                    ACTIVE_OVERLAYS.keySet().removeIf(anchor -> {
+                        var entry = ACTIVE_OVERLAYS.get(anchor);
+                        var structure = entry.fetchStructure();
+                        if (structure == null) return true;
+
+                        // --- overlay rendering ---
+
+                        var hasInvalidBlock = new MutableBoolean();
+
+                        if (entry.decayTime < 0) {
+                            var overlayConsumer = new OverlayVertexConsumer(
+                                    effectConsumers.getBuffer(ModelLoader.BLOCK_DESTRUCTION_RENDER_LAYERS.get(5 + (int) (Math.sin(System.currentTimeMillis() / 200d) * 5))),
+                                    matrices.peek(), 1
+                            );
+
+                            matrices.push();
+                            matrices.translate(anchor.getX(), anchor.getY(), anchor.getZ());
+
+                            structure.forEachPredicate((pos, predicate) -> {
+                                var state = context.world().getBlockState(testPos.set(anchor).move(pos)).rotate(StructureTemplate.inverse(entry.rotation));
+                                var result = predicate.test(state);
+
+                                if (result == BlockStatePredicate.Result.STATE_MATCH) {
+                                    return;
+                                } else if (!state.isAir() && result == BlockStatePredicate.Result.NO_MATCH) {
+                                    hasInvalidBlock.setTrue();
+
+                                    matrices.push();
+                                    matrices.translate(pos.getX(), pos.getY(), pos.getZ());
+                                    client.getBlockRenderManager().renderDamage(state, testPos, context.world(), matrices, overlayConsumer);
+                                    matrices.pop();
+                                }
+
+                                if (entry.visibleLayer != -1 && pos.getY() != entry.visibleLayer) return;
+                                renderOverlayBlock(matrices, CONSUMERS, pos, predicate, entry.rotation);
+
+                            }, entry.rotation);
+
+                            matrices.pop();
+                        }
+
+                        // --- hud setup ---
+
+                        var valid = structure.countValidStates(client.world, anchor, entry.rotation, BlockStatePredicate.MatchCategory.NON_AIR);
+                        var total = structure.predicatesOfType(BlockStatePredicate.MatchCategory.NON_AIR);
+                        var complete = structure.validate(client.world, anchor, entry.rotation);
+
+                        if (entry.decayTime >= 0) valid = total;
+
+                        int barTextureOffset = 0;
+                        if (hasInvalidBlock.booleanValue()) barTextureOffset = 20;
+                        if (complete) barTextureOffset = 10;
+
+                        entry.visualCompleteness += Delta.compute(entry.visualCompleteness, valid / (float) total, client.getLastFrameDuration());
+                        layout.child(Containers.verticalFlow(Sizing.content(), Sizing.content())
+                                .child(Components.label(Text.translatable("text.lavender.structure_hud.completion", Text.translatable(Util.createTranslationKey("structure", entry.structureId)), valid, total)).shadow(true))
+                                .child(Containers.verticalFlow(Sizing.content(), Sizing.content())
+                                        .child(Components.texture(BARS_TEXTURE, 0, barTextureOffset, 182, 5, 256, 48))
+                                        .child(Components.texture(BARS_TEXTURE, 0, barTextureOffset + 5, Math.round(182 * entry.visualCompleteness), 5, 256, 48).positioning(Positioning.absolute(0, 0)))
+                                        .child(Components.texture(BARS_TEXTURE, 0, 30, 182, 5, 256, 48).blend(true).positioning(Positioning.absolute(0, 0))))
+                                .gap(2)
+                                .horizontalAlignment(HorizontalAlignment.CENTER)
+                                .margins(Insets.bottom((int) (Easing.CUBIC.apply((Math.max(0, entry.decayTime - 30) + client.getTickDelta()) / 20f) * -32))));
+
+                        if (entry.decayTime < 0 && complete) {
+                            entry.decayTime = 0;
+                            client.player.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
+                        } else if (entry.decayTime >= 0) {
+                            entry.decayTime += client.getLastFrameDuration();
+                        }
+
+                        return entry.decayTime >= 50;
+                    });
+                });
+
+                if (PENDING_OVERLAY != null) {
+                    var structure = PENDING_OVERLAY.fetchStructure();
+                    if (structure != null) {
+                        if (client.player.raycast(5, client.getTickDelta(), false) instanceof BlockHitResult target) {
+                            var targetPos = target.getBlockPos().add(getPendingOffset(structure));
+                            if (!client.player.isSneaking()) targetPos = targetPos.offset(target.getSide());
+
+                            matrices.translate(targetPos.getX(), targetPos.getY(), targetPos.getZ());
+                            structure.forEachPredicate((pos, predicate) -> renderOverlayBlock(matrices, CONSUMERS, pos, predicate, PENDING_OVERLAY.rotation), PENDING_OVERLAY.rotation);
+                        }
+                    } else {
+                        PENDING_OVERLAY = null;
+                    }
+                }
+
+                matrices.pop();
+
+                GlStateManager._depthMask(true);
+                CONSUMERS.draw();
+                effectConsumers.draw();
+                client.getFramebuffer().beginWrite(false);
+
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+
+                RenderSystem.backupProjectionMatrix();
+                client.gameRenderer.blitScreenProgram.colorModulator.set(new float[]{1, 1, 1, .5f});
+                framebuffer.draw(framebuffer.textureWidth, framebuffer.textureHeight, false);
+                client.gameRenderer.blitScreenProgram.colorModulator.set(new float[]{1, 1, 1, 1});
+                RenderSystem.restoreProjectionMatrix();
+            });
         });
 
         WindowResizeCallback.EVENT.register((client, window) -> {

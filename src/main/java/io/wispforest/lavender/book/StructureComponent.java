@@ -1,5 +1,6 @@
 package io.wispforest.lavender.book;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import io.wispforest.lavender.client.StructureOverlayRenderer;
 import io.wispforest.lavender.structure.LavenderStructures;
 import io.wispforest.lavender.structure.StructureTemplate;
@@ -70,26 +71,28 @@ public class StructureComponent extends BaseComponent {
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(this.rotation));
         matrices.translate(this.structure.xSize / -2f, this.structure.ySize / -2f, this.structure.zSize / -2f);
 
-        structure.forEachPredicate((blockPos, predicate) -> {
-            if (this.visibleLayer != -1 && this.visibleLayer != blockPos.getY()) return;
+        RenderSystem.runAsFancy(() -> {
+            structure.forEachPredicate((blockPos, predicate) -> {
+                if (this.visibleLayer != -1 && this.visibleLayer != blockPos.getY()) return;
 
-            matrices.push();
-            matrices.translate(blockPos.getX(), blockPos.getY(), blockPos.getZ());
+                matrices.push();
+                matrices.translate(blockPos.getX(), blockPos.getY(), blockPos.getZ());
 
-            client.getBlockRenderManager().renderBlockAsEntity(
-                    predicate.preview(), matrices, entityBuffers,
-                    LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE,
-                    OverlayTexture.DEFAULT_UV
-            );
+                client.getBlockRenderManager().renderBlockAsEntity(
+                        predicate.preview(), matrices, entityBuffers,
+                        LightmapTextureManager.MAX_BLOCK_LIGHT_COORDINATE,
+                        OverlayTexture.DEFAULT_UV
+                );
+
+                matrices.pop();
+            });
 
             matrices.pop();
+
+            DiffuseLighting.disableGuiDepthLighting();
+            entityBuffers.draw();
+            DiffuseLighting.enableGuiDepthLighting();
         });
-
-        matrices.pop();
-
-        DiffuseLighting.disableGuiDepthLighting();
-        entityBuffers.draw();
-        DiffuseLighting.enableGuiDepthLighting();
 
         if (this.placeable) {
             if (StructureOverlayRenderer.isShowingOverlay(this.structure.id)) {
