@@ -2,6 +2,7 @@ package io.wispforest.lavender.structure;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * A predicate used for matching the elements of a structure
@@ -17,13 +18,15 @@ public interface BlockStatePredicate {
      * a full state match
      */
     BlockStatePredicate NULL_PREDICATE = new BlockStatePredicate() {
+        @NotNull
         @Override
-        public BlockState preview() {
-            return Blocks.AIR.getDefaultState();
+        public BlockState[] previewBlockstates() {
+            return new BlockState[]{Blocks.AIR.getDefaultState()};
         }
 
+        @NotNull
         @Override
-        public Result test(BlockState blockState) {
+        public Result test(@NotNull BlockState blockState) {
             return Result.STATE_MATCH;
         }
 
@@ -38,13 +41,15 @@ public interface BlockStatePredicate {
      * match on any air block
      */
     BlockStatePredicate AIR_PREDICATE = new BlockStatePredicate() {
+        @NotNull
         @Override
-        public BlockState preview() {
-            return Blocks.AIR.getDefaultState();
+        public BlockState[] previewBlockstates() {
+            return new BlockState[]{Blocks.AIR.getDefaultState()};
         }
 
+        @NotNull
         @Override
-        public Result test(BlockState blockState) {
+        public Result test(@NotNull BlockState blockState) {
             return blockState.isAir() ? Result.STATE_MATCH : Result.NO_MATCH;
         }
 
@@ -54,13 +59,14 @@ public interface BlockStatePredicate {
         }
     };
 
-    Result test(BlockState state);
+    @NotNull
+    Result test(@NotNull BlockState state);
 
     /**
      * @return {@code true} if this predicate finds a {@linkplain Result#STATE_MATCH state match}
      * on the given state
      */
-    default boolean matches(BlockState state) {
+    default boolean matches(@NotNull BlockState state) {
         return this.test(state) == Result.STATE_MATCH;
     }
 
@@ -69,7 +75,16 @@ public interface BlockStatePredicate {
      * is called every frame the preview is rendered, returning a different sample
      * depending on system time (e.g. to cycle to a block tag) is valid behavior
      */
-    BlockState preview();
+    default BlockState preview() {
+        BlockState[] states = this.previewBlockstates();
+        return states[(int) (System.currentTimeMillis() / 1000 % states.length)];
+    }
+
+    /**
+     * @return An array of all possible preview block states.
+     */
+    @NotNull
+    BlockState[] previewBlockstates();
 
     /**
      * @return Whether this predicate falls into the given matching category, generally
