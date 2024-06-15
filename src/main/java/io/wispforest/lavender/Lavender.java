@@ -39,7 +39,7 @@ public class Lavender implements ModInitializer {
 
         CommandRegistrationCallback.EVENT.register(LavenderCommands::register);
 
-        PayloadTypeRegistry.playS2C().register(WorldUUIDPayload.ID, CodecUtils.packetCodec(WorldUUIDPayload.ENDEC));
+        PayloadTypeRegistry.playS2C().register(WorldUUIDPayload.ID, CodecUtils.toPacketCodec(WorldUUIDPayload.ENDEC));
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             sender.sendPacket(new WorldUUIDPayload(server.getOverworld().getPersistentStateManager().getOrCreate(WorldUUIDState.TYPE, "lavender_world_id").id));
