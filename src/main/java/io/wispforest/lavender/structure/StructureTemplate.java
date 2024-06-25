@@ -1,10 +1,10 @@
 package io.wispforest.lavender.structure;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import com.mojang.datafixers.util.Either;
 import it.unimi.dsi.fastutil.chars.Char2ObjectOpenHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -29,18 +29,23 @@ import net.minecraft.world.World;
 import net.minecraft.world.biome.ColorResolver;
 import net.minecraft.world.chunk.light.LightingProvider;
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.apache.commons.lang3.tuple.MutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.StreamSupport;
 
-public class StructureTemplate {
+public class StructureTemplate implements Iterable<Pair<BlockPos, BlockStatePredicate>> {
 
     private static final char AIR_BLOCKSTATE_KEY = '_';
 
@@ -48,11 +53,15 @@ public class StructureTemplate {
 
     private static final char ANCHOR_BLOCKSTATE_KEY = '#';
 
-    public final int xSize, ySize, zSize;
+    private final int xSize;
 
-    public final Vec3i anchor;
+    private final int ySize;
 
-    public final Identifier id;
+    private final int zSize;
+
+    private final Vec3i anchor;
+
+    private final Identifier id;
 
     private final BlockStatePredicate[][][] predicates;
 
@@ -78,110 +87,7 @@ public class StructureTemplate {
         }
     }
 
-    /**
-     * @return How many predicates of this structure template fall
-     * into the given match category
-     */
-    public int predicatesOfType(BlockStatePredicate.MatchCategory type) {
-        return this.predicateCountByType.get(type).intValue();
-    }
-
-    /**
-     * @return The anchor position of this template,
-     * to be used when placing in the world
-     */
-    public Vec3i anchor() {
-        return this.anchor;
-    }
-
-    // --- iteration ---
-
-    public void forEachPredicate(BiConsumer<BlockPos, BlockStatePredicate> action) {
-        this.forEachPredicate(action, BlockRotation.NONE);
-    }
-
-    /**
-     * Execute {@code action} for every predicate in this structure template,
-     * rotated on the y-axis by {@code rotation}
-     */
-    public void forEachPredicate(BiConsumer<BlockPos, BlockStatePredicate> action, BlockRotation rotation) {
-        var mutable = new BlockPos.Mutable();
-
-        for (int x = 0; x < this.predicates.length; x++) {
-            for (int y = 0; y < this.predicates[x].length; y++) {
-                for (int z = 0; z < this.predicates[x][y].length; z++) {
-
-                    switch (rotation) {
-                        case CLOCKWISE_90 -> mutable.set(this.zSize - z - 1, y, x);
-                        case COUNTERCLOCKWISE_90 -> mutable.set(z, y, this.xSize - x - 1);
-                        case CLOCKWISE_180 -> mutable.set(this.xSize - x - 1, y, this.zSize - z - 1);
-                        default -> mutable.set(x, y, z);
-                    }
-
-                    action.accept(mutable, this.predicates[x][y][z]);
-                }
-            }
-        }
-    }
-
     // --- validation ---
-
-    /**
-     * Shorthand of {@link #validate(World, BlockPos, BlockRotation)} which uses
-     * {@link BlockRotation#NONE}
-     */
-    public boolean validate(World world, BlockPos anchor) {
-        return this.validate(world, anchor, BlockRotation.NONE);
-    }
-
-    /**
-     * @return {@code true} if this template matches the block states present
-     * in the given world at the given position
-     */
-    public boolean validate(World world, BlockPos anchor, BlockRotation rotation) {
-        return this.countValidStates(world, anchor, rotation) == this.predicatesOfType(BlockStatePredicate.MatchCategory.NON_NULL);
-    }
-
-    /**
-     * Shorthand of {@link #countValidStates(World, BlockPos, BlockRotation)} which uses
-     * {@link BlockRotation#NONE}
-     */
-    public int countValidStates(World world, BlockPos anchor) {
-        return countValidStates(world, anchor, BlockRotation.NONE, BlockStatePredicate.MatchCategory.NON_NULL);
-    }
-
-    /**
-     * Shorthand of {@link #countValidStates(World, BlockPos, BlockRotation, BlockStatePredicate.MatchCategory)}
-     * which uses {@link BlockStatePredicate.MatchCategory#NON_NULL}
-     */
-    public int countValidStates(World world, BlockPos anchor, BlockRotation rotation) {
-        return countValidStates(world, anchor, rotation, BlockStatePredicate.MatchCategory.NON_NULL);
-    }
-
-    /**
-     * @return The amount of predicates in this template which match the block
-     * states present in the given world at the given position
-     */
-    public int countValidStates(World world, BlockPos anchor, BlockRotation rotation, BlockStatePredicate.MatchCategory predicateFilter) {
-        var validStates = new MutableInt();
-        var mutable = new BlockPos.Mutable();
-
-        this.forEachPredicate((pos, predicate) -> {
-            if (!predicate.isOf(predicateFilter)) return;
-
-            if (predicate.matches(world.getBlockState(mutable.set(pos).move(anchor)).rotate(inverse(rotation)))) {
-                validStates.increment();
-            }
-        }, rotation);
-
-        return validStates.intValue();
-    }
-
-    // --- utility ---
-
-    public BlockRenderView asBlockRenderView() {
-        return new StructureTemplateRenderView(Objects.requireNonNull(MinecraftClient.getInstance().world), this);
-    }
 
     public static BlockRotation inverse(BlockRotation rotation) {
         return switch (rotation) {
@@ -191,8 +97,6 @@ public class StructureTemplate {
             case CLOCKWISE_180 -> BlockRotation.CLOCKWISE_180;
         };
     }
-
-    // --- parsing ---
 
     @NotNull
     public static StructureTemplate parse(Identifier resourceId, JsonObject json) {
@@ -273,26 +177,11 @@ public class StructureTemplate {
     private static Char2ObjectOpenHashMap<BlockStatePredicate> buildStructureKeysMap(@NotNull JsonObject keyObject) {
         var keys = new Char2ObjectOpenHashMap<BlockStatePredicate>();
         for (var entry : keyObject.entrySet()) {
-            char key;
-            if (entry.getKey().length() == 1) {
-                key = entry.getKey().charAt(0);
-                if (key == ANCHOR_BLOCKSTATE_KEY) {
-                    throw new JsonParseException("Key '#' is reserved for 'anchor' declarations. Rename the key to 'anchor' and use '#' in the structure definition.");
-                } else if (key == AIR_BLOCKSTATE_KEY) {
-                    throw new JsonParseException("Key '_' is a reserved key for marking a block that must be AIR.");
-                } else if (key == NULL_BLOCKSTATE_KEY) {
-                    throw new JsonParseException("Key ' ' is a reserved key for marking a block that can be anything.");
-                }
-            } else if ("anchor".equals(entry.getKey())) {
-                key = ANCHOR_BLOCKSTATE_KEY;
-            } else {
-                throw new JsonParseException("Keys should only be a single character or should be 'anchor'.");
-            }
+            char key = blockstateKeyForEntry(entry);
 
             if (keys.containsKey(key)) {
-                throw new JsonParseException("Keys can only appear once. Key '" + key + "' appears twice.");
+                throw new JsonParseException("Keys can only appear once. Key '%s' appears twice.".formatted(key));
             }
-
 
             if (entry.getValue().isJsonArray()) {
                 JsonArray blockStringsArray = entry.getValue().getAsJsonArray();
@@ -306,7 +195,27 @@ public class StructureTemplate {
                 throw new JsonParseException("The values for the map of key-to-blocks must either be a string or an array of strings.");
             }
         }
+
         return keys;
+    }
+
+    private static char blockstateKeyForEntry(final Map.Entry<String, JsonElement> entry) {
+        char key;
+        if (entry.getKey().length() == 1) {
+            key = entry.getKey().charAt(0);
+            if (key == ANCHOR_BLOCKSTATE_KEY) {
+                throw new JsonParseException("Key '#' is reserved for 'anchor' declarations. Rename the key to 'anchor' and use '#' in the structure definition.");
+            } else if (key == AIR_BLOCKSTATE_KEY) {
+                throw new JsonParseException("Key '_' is a reserved key for marking a block that must be AIR.");
+            } else if (key == NULL_BLOCKSTATE_KEY) {
+                throw new JsonParseException("Key ' ' is a reserved key for marking a block that can be anything.");
+            }
+        } else if ("anchor".equals(entry.getKey())) {
+            key = ANCHOR_BLOCKSTATE_KEY;
+        } else {
+            throw new JsonParseException("Keys should only be a single character or should be 'anchor'.");
+        }
+        return key;
     }
 
     @NotNull
@@ -320,6 +229,155 @@ public class StructureTemplate {
         } catch (CommandSyntaxException e) {
             throw new JsonParseException("Failed to parse block state predicate", e);
         }
+    }
+
+    /**
+     * Shorthand of {@link #validate(World, BlockPos, BlockRotation)} which uses
+     * {@link BlockRotation#NONE}
+     */
+    public boolean validate(World world, BlockPos anchor) {
+        return this.validate(world, anchor, BlockRotation.NONE);
+    }
+
+    /**
+     * @return {@code true} if this template matches the block states present
+     * in the given world at the given position
+     */
+    public boolean validate(World world, BlockPos anchor, BlockRotation rotation) {
+        return this.countValidStates(world, anchor, rotation) == this.predicatesOfType(BlockStatePredicate.MatchCategory.NON_NULL);
+    }
+
+    // --- parsing ---
+
+    /**
+     * Shorthand of {@link #countValidStates(World, BlockPos, BlockRotation)} which uses
+     * {@link BlockRotation#NONE}
+     */
+    public int countValidStates(World world, BlockPos anchor) {
+        return countValidStates(world, anchor, BlockRotation.NONE, BlockStatePredicate.MatchCategory.NON_NULL);
+    }
+
+    /**
+     * Shorthand of {@link #countValidStates(World, BlockPos, BlockRotation, BlockStatePredicate.MatchCategory)}
+     * which uses {@link BlockStatePredicate.MatchCategory#NON_NULL}
+     */
+    public int countValidStates(World world, BlockPos anchor, BlockRotation rotation) {
+        return countValidStates(world, anchor, rotation, BlockStatePredicate.MatchCategory.NON_NULL);
+    }
+
+    /**
+     * @return The amount of predicates in this template which match the block
+     * states present in the given world at the given position
+     */
+    public int countValidStates(World world, BlockPos anchor, BlockRotation rotation, BlockStatePredicate.MatchCategory predicateFilter) {
+        var validStates = new MutableInt();
+        var mutable = new BlockPos.Mutable();
+
+        this.forEachPredicate((pos, predicate) -> {
+            if (!predicate.isOf(predicateFilter)) return;
+
+            if (predicate.matches(world.getBlockState(mutable.set(pos).move(anchor)).rotate(inverse(rotation)))) {
+                validStates.increment();
+            }
+        }, rotation);
+
+        return validStates.intValue();
+    }
+
+    // --- utility ---
+
+    public BlockRenderView asBlockRenderView() {
+        return new StructureTemplateRenderView(Objects.requireNonNull(MinecraftClient.getInstance().world), this);
+    }
+
+    /**
+     * @return How many predicates of this structure template fall
+     * into the given match category
+     */
+    public int predicatesOfType(BlockStatePredicate.MatchCategory type) {
+        return this.predicateCountByType.get(type).intValue();
+    }
+
+    public Identifier id() {
+        return this.id;
+    }
+
+    public BlockStatePredicate[][][] predicates() {
+        return this.predicates;
+    }
+
+    public EnumMap<BlockStatePredicate.MatchCategory, MutableInt> predicateCountByType() {
+        return this.predicateCountByType;
+    }
+
+    public int xSize() {
+        return this.xSize;
+    }
+
+    public int ySize() {
+        return this.ySize;
+    }
+
+    public int zSize() {
+        return this.zSize;
+    }
+
+    /**
+     * @return The anchor position of this template,
+     * to be used when placing in the world
+     */
+    public Vec3i anchor() {
+        return this.anchor;
+    }
+
+    // --- iteration ---
+
+    public void forEachPredicate(BiConsumer<BlockPos, BlockStatePredicate> action) {
+        this.forEachPredicate(action, BlockRotation.NONE);
+    }
+
+    /**
+     * Execute {@code action} for every predicate in this structure template,
+     * rotated on the y-axis by {@code rotation}
+     */
+    public void forEachPredicate(BiConsumer<BlockPos, BlockStatePredicate> action, BlockRotation rotation) {
+        var mutable = new BlockPos.Mutable();
+
+        for (int x = 0; x < this.predicates.length; x++) {
+            for (int y = 0; y < this.predicates[x].length; y++) {
+                for (int z = 0; z < this.predicates[x][y].length; z++) {
+
+                    switch (rotation) {
+                        case CLOCKWISE_90 -> mutable.set(this.zSize - z - 1, y, x);
+                        case COUNTERCLOCKWISE_90 -> mutable.set(z, y, this.xSize - x - 1);
+                        case CLOCKWISE_180 -> mutable.set(this.xSize - x - 1, y, this.zSize - z - 1);
+                        default -> mutable.set(x, y, z);
+                    }
+
+                    action.accept(mutable, this.predicates[x][y][z]);
+                }
+            }
+        }
+    }
+
+    @NotNull
+    @Override
+    public Iterator<Pair<BlockPos, BlockStatePredicate>> iterator() {
+        return iterator(BlockRotation.NONE);
+    }
+
+    @Override
+    public void forEach(Consumer<? super Pair<BlockPos, BlockStatePredicate>> action) {
+        var mutablePair = new MutablePair<BlockPos, BlockStatePredicate>();
+        forEachPredicate((pos, predicate) -> {
+            mutablePair.setLeft(pos);
+            mutablePair.setRight(predicate);
+            action.accept(mutablePair);
+        });
+    }
+
+    public Iterator<Pair<BlockPos, BlockStatePredicate>> iterator(BlockRotation rotation) {
+        return new StructureTemplateIterator(this, rotation);
     }
 
     public static class NestedBlockStatePredicate implements BlockStatePredicate {
@@ -336,11 +394,6 @@ public class StructureTemplate {
                     .toArray(BlockState[]::new);
         }
 
-        @Override
-        public BlockState[] previewBlockstates() {
-            return this.previewStates;
-        }
-
         @NotNull
         @Override
         public Result test(@NotNull BlockState state) {
@@ -354,6 +407,11 @@ public class StructureTemplate {
             }
 
             return hasBlockMatch ? Result.BLOCK_MATCH : Result.NO_MATCH;
+        }
+
+        @Override
+        public BlockState[] previewBlockstates() {
+            return this.previewStates;
         }
     }
 
@@ -373,11 +431,6 @@ public class StructureTemplate {
             this.properties = properties;
         }
 
-        @Override
-        public BlockState[] previewBlockstates() {
-            return this.states;
-        }
-
         @NotNull
         @Override
         public Result test(@NotNull BlockState state) {
@@ -390,6 +443,11 @@ public class StructureTemplate {
             }
 
             return Result.STATE_MATCH;
+        }
+
+        @Override
+        public BlockState[] previewBlockstates() {
+            return this.states;
         }
     }
 
@@ -425,11 +483,6 @@ public class StructureTemplate {
             }).toArray(BlockState[]::new);
         }
 
-        @Override
-        public BlockState[] previewBlockstates() {
-            return this.previewStates;
-        }
-
         @NotNull
         @Override
         public Result test(@NotNull BlockState state) {
@@ -450,6 +503,11 @@ public class StructureTemplate {
             }
 
             return Result.STATE_MATCH;
+        }
+
+        @Override
+        public BlockState[] previewBlockstates() {
+            return this.previewStates;
         }
     }
 
@@ -481,7 +539,7 @@ public class StructureTemplate {
                 pos.getY() < 0 || pos.getY() >= this.template.ySize ||
                 pos.getZ() < 0 || pos.getZ() >= this.template.zSize)
                 return Blocks.AIR.getDefaultState();
-            return this.template.predicates[pos.getX()][pos.getY()][pos.getZ()].preview();
+            return this.template.predicates()[pos.getX()][pos.getY()][pos.getZ()].preview();
         }
 
         @Override
@@ -497,6 +555,62 @@ public class StructureTemplate {
         @Override
         public int getBottomY() {
             return this.world.getBottomY();
+        }
+    }
+
+    private static final class StructureTemplateIterator implements Iterator<Pair<BlockPos, BlockStatePredicate>> {
+
+        private final StructureTemplate template;
+
+        private final BlockPos.Mutable currentPos = new BlockPos.Mutable();
+
+        private final MutablePair<BlockPos, BlockStatePredicate> currentElement = new MutablePair<>();
+
+        private final BlockRotation rotation;
+
+        private int posX = 0;
+
+        private int posY = 0;
+
+        private int posZ = 0;
+
+        private StructureTemplateIterator(StructureTemplate template, BlockRotation rotation) {
+            this.template = template;
+            this.rotation = rotation;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this.posX < this.template.xSize() - 1 && this.posY < this.template.ySize() - 1 && this.posZ < this.template.zSize() - 1;
+        }
+
+        @Override
+        public Pair<BlockPos, BlockStatePredicate> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+
+            switch (this.rotation) {
+                case CLOCKWISE_90 -> this.currentPos.set(this.template.zSize() - this.posZ - 1, this.posY, this.posX);
+                case COUNTERCLOCKWISE_90 -> this.currentPos.set(this.posZ, this.posY, this.template.xSize() - this.posX - 1);
+                case CLOCKWISE_180 ->
+                        this.currentPos.set(this.template.xSize() - this.posX - 1, this.posY, this.template.zSize() - this.posZ - 1);
+                default -> this.currentPos.set(this.posX, this.posY, this.posZ);
+            }
+
+            this.currentElement.setRight(this.template.predicates()[this.posX][this.posY][this.posZ]);
+            this.currentElement.setLeft(this.currentPos);
+
+            // Advance to next position
+            if (++this.posZ >= this.template.zSize()) {
+                this.posZ = 0;
+                if (++this.posY >= this.template.ySize()) {
+                    this.posY = 0;
+                    ++this.posX;
+                }
+            }
+
+            return this.currentElement;
         }
     }
 }
