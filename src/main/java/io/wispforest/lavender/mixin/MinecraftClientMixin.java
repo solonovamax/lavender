@@ -59,7 +59,7 @@ public class MinecraftClientMixin {
 
     @Shadow
     @Final
-    private RenderTickCounter.Dynamic renderTickCounter;
+    private RenderTickCounter renderTickCounter;
 
     @Inject(method = "render", at = @At("HEAD"))
     private void onFrameStart(boolean tick, CallbackInfo ci) {
@@ -85,8 +85,8 @@ public class MinecraftClientMixin {
         if (this.player == null || this.cameraEntity == null || this.interactionManager == null)
             return;
 
-        double blockRange = this.player.getBlockInteractionRange();
-        float tickDelta = this.renderTickCounter.getTickDelta(true);
+        double blockRange = this.interactionManager.getReachDistance();
+        float tickDelta = this.renderTickCounter.tickDelta;
         Vec3d rotation = this.player.getRotationVec(tickDelta);
         Vec3d rayLength = rotation.multiply(blockRange);
         Vec3d cameraPos = this.player.getCameraPosVec(tickDelta);
