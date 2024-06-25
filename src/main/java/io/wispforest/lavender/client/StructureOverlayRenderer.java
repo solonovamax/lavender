@@ -40,6 +40,7 @@ import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL30C;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -65,6 +66,10 @@ public class StructureOverlayRenderer {
 
     private static final Identifier HUD_COMPONENT_ID = Lavender.id("structure_overlay");
     private static final Identifier BARS_TEXTURE = Lavender.id("textures/gui/structure_overlay_bars.png");
+
+    public static Map<BlockPos, OverlayEntry> getActiveOverlays() {
+        return Collections.unmodifiableMap(ACTIVE_OVERLAYS);
+    }
 
     public static void addPendingOverlay(Identifier structure) {
         PENDING_OVERLAY = new OverlayEntry(structure, BlockRotation.NONE);
@@ -312,7 +317,7 @@ public class StructureOverlayRenderer {
         matrices.pop();
     }
 
-    private static class OverlayEntry {
+    public static class OverlayEntry {
 
         public final Identifier structureId;
 
