@@ -1,6 +1,7 @@
 package io.wispforest.lavender.structure;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -28,17 +29,22 @@ import net.minecraft.world.World;
 import net.minecraft.world.biome.ColorResolver;
 import net.minecraft.world.chunk.light.LightingProvider;
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.apache.commons.lang3.tuple.MutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.StreamSupport;
 
-public class StructureTemplate {
+public class StructureTemplate implements Iterable<Pair<BlockPos, BlockStatePredicate>> {
 
     private static final char AIR_BLOCKSTATE_KEY = '_';
     private static final char NULL_BLOCKSTATE_KEY = ' ';
@@ -78,6 +84,30 @@ public class StructureTemplate {
         return this.predicateCountByType.get(type).intValue();
     }
 
+    public Identifier id() {
+        return this.id;
+    }
+
+    public BlockStatePredicate[][][] predicates() {
+        return this.predicates;
+    }
+
+    public EnumMap<BlockStatePredicate.MatchCategory, MutableInt> predicateCountByType() {
+        return this.predicateCountByType;
+    }
+
+    public int xSize() {
+        return this.xSize;
+    }
+
+    public int ySize() {
+        return this.ySize;
+    }
+
+    public int zSize() {
+        return this.zSize;
+    }
+
     /**
      * @return The anchor position of this template,
      * to be used when placing in the world
@@ -114,6 +144,25 @@ public class StructureTemplate {
                 }
             }
         }
+    }
+
+    @Override
+    public Iterator<Pair<BlockPos, BlockStatePredicate>> iterator() {
+        return iterator(BlockRotation.NONE);
+    }
+
+    @Override
+    public void forEach(Consumer<? super Pair<BlockPos, BlockStatePredicate>> action) {
+        var mutablePair = new MutablePair<BlockPos, BlockStatePredicate>();
+        forEachPredicate((pos, predicate) -> {
+            mutablePair.setLeft(pos);
+            mutablePair.setRight(predicate);
+            action.accept(mutablePair);
+        });
+    }
+
+    public Iterator<Pair<BlockPos, BlockStatePredicate>> iterator(BlockRotation rotation) {
+        return new StructureTemplateIterator(this, rotation);
     }
 
     // --- validation ---
@@ -263,26 +312,11 @@ public class StructureTemplate {
     private static Char2ObjectOpenHashMap<BlockStatePredicate> buildStructureKeysMap(JsonObject keyObject) {
         var keys = new Char2ObjectOpenHashMap<BlockStatePredicate>();
         for (var entry : keyObject.entrySet()) {
-            char key;
-            if (entry.getKey().length() == 1) {
-                key = entry.getKey().charAt(0);
-                if (key == ANCHOR_BLOCKSTATE_KEY) {
-                    throw new JsonParseException("Key '#' is reserved for 'anchor' declarations. Rename the key to 'anchor' and use '#' in the structure definition.");
-                } else if (key == AIR_BLOCKSTATE_KEY) {
-                    throw new JsonParseException("Key '_' is a reserved key for marking a block that must be AIR.");
-                } else if (key == NULL_BLOCKSTATE_KEY) {
-                    throw new JsonParseException("Key ' ' is a reserved key for marking a block that can be anything.");
-                }
-            } else if ("anchor".equals(entry.getKey())) {
-                key = ANCHOR_BLOCKSTATE_KEY;
-            } else {
-                throw new JsonParseException("Keys should only be a single character or should be 'anchor'.");
-            }
+            char key = blockstateKeyForEntry(entry);
 
             if (keys.containsKey(key)) {
-                throw new JsonParseException("Keys can only appear once. Key '" + key + "' appears twice.");
+                throw new JsonParseException("Keys can only appear once. Key '%s' appears twice.".formatted(key));
             }
-
 
             if (entry.getValue().isJsonArray()) {
                 JsonArray blockStringsArray = entry.getValue().getAsJsonArray();
@@ -296,7 +330,27 @@ public class StructureTemplate {
                 throw new JsonParseException("The values for the map of key-to-blocks must either be a string or an array of strings.");
             }
         }
+
         return keys;
+    }
+
+    private static char blockstateKeyForEntry(final Map.Entry<String, JsonElement> entry) {
+        char key;
+        if (entry.getKey().length() == 1) {
+            key = entry.getKey().charAt(0);
+            if (key == ANCHOR_BLOCKSTATE_KEY) {
+                throw new JsonParseException("Key '#' is reserved for 'anchor' declarations. Rename the key to 'anchor' and use '#' in the structure definition.");
+            } else if (key == AIR_BLOCKSTATE_KEY) {
+                throw new JsonParseException("Key '_' is a reserved key for marking a block that must be AIR.");
+            } else if (key == NULL_BLOCKSTATE_KEY) {
+                throw new JsonParseException("Key ' ' is a reserved key for marking a block that can be anything.");
+            }
+        } else if ("anchor".equals(entry.getKey())) {
+            key = ANCHOR_BLOCKSTATE_KEY;
+        } else {
+            throw new JsonParseException("Keys should only be a single character or should be 'anchor'.");
+        }
+        return key;
     }
 
     private static BlockStatePredicate parseStringToBlockStatePredicate(String blockOrTag) {
@@ -453,7 +507,7 @@ public class StructureTemplate {
                 pos.getY() < 0 || pos.getY() >= this.template.ySize ||
                 pos.getZ() < 0 || pos.getZ() >= this.template.zSize)
                 return Blocks.AIR.getDefaultState();
-            return this.template.predicates[pos.getX()][pos.getY()][pos.getZ()].preview();
+            return this.template.predicates()[pos.getX()][pos.getY()][pos.getZ()].preview();
         }
 
         @Override
@@ -469,6 +523,58 @@ public class StructureTemplate {
         @Override
         public int getBottomY() {
             return this.world.getBottomY();
+        }
+    }
+
+    private static final class StructureTemplateIterator implements Iterator<Pair<BlockPos, BlockStatePredicate>> {
+
+        private final StructureTemplate template;
+
+        private final BlockPos.Mutable currentPos = new BlockPos.Mutable();
+
+        private final MutablePair<BlockPos, BlockStatePredicate> currentElement = new MutablePair<>();
+
+        private final BlockRotation rotation;
+
+        private int posX = 0, posY = 0, posZ = 0;
+
+        private StructureTemplateIterator(StructureTemplate template, BlockRotation rotation) {
+            this.template = template;
+            this.rotation = rotation;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return this.posX < this.template.xSize() - 1 && this.posY < this.template.ySize() - 1 && this.posZ < this.template.zSize() - 1;
+        }
+
+        @Override
+        public Pair<BlockPos, BlockStatePredicate> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+
+            switch (this.rotation) {
+                case CLOCKWISE_90 -> this.currentPos.set(this.template.zSize() - this.posZ - 1, this.posY, this.posX);
+                case COUNTERCLOCKWISE_90 -> this.currentPos.set(this.posZ, this.posY, this.template.xSize() - this.posX - 1);
+                case CLOCKWISE_180 ->
+                        this.currentPos.set(this.template.xSize() - this.posX - 1, this.posY, this.template.zSize() - this.posZ - 1);
+                default -> this.currentPos.set(this.posX, this.posY, this.posZ);
+            }
+
+            this.currentElement.setRight(this.template.predicates()[this.posX][this.posY][this.posZ]);
+            this.currentElement.setLeft(this.currentPos);
+
+            // Advance to next position
+            if (++this.posZ >= this.template.zSize()) {
+                this.posZ = 0;
+                if (++this.posY >= this.template.ySize()) {
+                    this.posY = 0;
+                    ++this.posX;
+                }
+            }
+
+            return this.currentElement;
         }
     }
 }
