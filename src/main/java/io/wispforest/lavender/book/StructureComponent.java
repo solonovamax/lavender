@@ -36,7 +36,7 @@ public class StructureComponent extends BaseComponent {
         var entityBuffers = client.getBufferBuilders().getEntityVertexConsumers();
 
         float scale = Math.min(this.width, this.height);
-        scale /= Math.max(structure.xSize, Math.max(structure.ySize, structure.zSize));
+        scale /= Math.max(this.structure.xSize(), Math.max(this.structure.ySize(), this.structure.zSize()));
         scale /= 1.625f;
 
         var matrices = context.getMatrices();
@@ -47,7 +47,7 @@ public class StructureComponent extends BaseComponent {
 
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(this.displayAngle));
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees((float) (System.currentTimeMillis() / 75d % 360d)));
-        matrices.translate(this.structure.xSize / -2f, this.structure.ySize / -2f, this.structure.zSize / -2f);
+        matrices.translate(this.structure.xSize() / -2.0f, this.structure.ySize() / -2.0f, this.structure.zSize() / -2.0f);
 
         structure.forEachPredicate((blockPos, predicate) -> {
             if (this.visibleLayer != -1 && this.visibleLayer != blockPos.getY()) return;
@@ -70,7 +70,7 @@ public class StructureComponent extends BaseComponent {
         entityBuffers.draw();
         DiffuseLighting.enableGuiDepthLighting();
 
-        if (StructureOverlayRenderer.isShowingOverlay(this.structure.id)) {
+        if (StructureOverlayRenderer.isShowingOverlay(this.structure.id())) {
             context.drawText(client.textRenderer, Text.translatable("text.lavender.structure_component.active_overlay_hint"), this.x + this.width - 5 - client.textRenderer.getWidth("⚓"), this.y + this.height - 9 - 5, 0, false);
             this.tooltip(Text.translatable("text.lavender.structure_component.hide_hint"));
         } else {
@@ -83,11 +83,11 @@ public class StructureComponent extends BaseComponent {
         var result = super.onMouseDown(mouseX, mouseY, button);
         if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return result;
 
-        if (StructureOverlayRenderer.isShowingOverlay(this.structure.id)) {
-            StructureOverlayRenderer.removeAllOverlays(this.structure.id);
+        if (StructureOverlayRenderer.isShowingOverlay(this.structure.id())) {
+            StructureOverlayRenderer.removeAllOverlays(this.structure.id());
         } else {
-            StructureOverlayRenderer.addPendingOverlay(this.structure.id);
-            StructureOverlayRenderer.restrictVisibleLayer(this.structure.id, this.visibleLayer);
+            StructureOverlayRenderer.addPendingOverlay(this.structure.id());
+            StructureOverlayRenderer.restrictVisibleLayer(this.structure.id(), this.visibleLayer);
 
             MinecraftClient.getInstance().setScreen(null);
         }
@@ -96,7 +96,7 @@ public class StructureComponent extends BaseComponent {
     }
 
     public StructureComponent visibleLayer(int visibleLayer) {
-        StructureOverlayRenderer.restrictVisibleLayer(this.structure.id, visibleLayer);
+        StructureOverlayRenderer.restrictVisibleLayer(this.structure.id(), visibleLayer);
 
         this.visibleLayer = visibleLayer;
         return this;
