@@ -123,6 +123,7 @@ public class LavenderClient implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(Lavender.WORLD_ID_CHANNEL, (client, handler, buf, responseSender) -> {
             currentWorldId = buf.readUuid();
+            StructureOverlayRenderer.reloadActiveOverlays();
         });
 
         UIParsing.registerFactory(Lavender.id("ingredient"), element -> {
