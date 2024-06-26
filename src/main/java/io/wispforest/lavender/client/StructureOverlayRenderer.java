@@ -3,6 +3,7 @@ package io.wispforest.lavender.client;
 import com.google.common.base.Suppliers;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.wispforest.lavender.Lavender;
+import io.wispforest.lavender.book.LavenderClientStorage;
 import io.wispforest.lavender.structure.BlockStatePredicate;
 import io.wispforest.lavender.structure.LavenderStructures;
 import io.wispforest.lavender.structure.StructureTemplate;
@@ -35,6 +36,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3i;
 import org.apache.commons.lang3.mutable.MutableBoolean;
+import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL30C;
 
@@ -42,6 +44,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public class StructureOverlayRenderer {
 
@@ -70,6 +73,7 @@ public class StructureOverlayRenderer {
 
     public static void addOverlay(BlockPos anchorPoint, Identifier structure, BlockRotation rotation) {
         ACTIVE_OVERLAYS.put(anchorPoint, new OverlayEntry(structure, rotation));
+        saveActiveOverlays();
     }
 
     public static boolean isShowingOverlay(Identifier structure) {
@@ -88,6 +92,7 @@ public class StructureOverlayRenderer {
         }
 
         ACTIVE_OVERLAYS.values().removeIf(entry -> structure.equals(entry.structureId));
+        saveActiveOverlays();
     }
 
     public static int getLayerRestriction(Identifier structure) {
@@ -108,10 +113,12 @@ public class StructureOverlayRenderer {
             if (!structure.equals(entry.structureId)) continue;
             entry.visibleLayer = visibleLayer;
         }
+        saveActiveOverlays();
     }
 
     public static void clearOverlays() {
         ACTIVE_OVERLAYS.clear();
+        saveActiveOverlays();
     }
 
     public static void rotatePending(boolean clockwise) {
@@ -121,6 +128,20 @@ public class StructureOverlayRenderer {
 
     public static boolean hasPending() {
         return PENDING_OVERLAY != null;
+    }
+
+    private static void saveActiveOverlays() {
+        LavenderClientStorage.setActiveStructures(Collections.unmodifiableMap(ACTIVE_OVERLAYS));
+    }
+
+    public static void reloadActiveOverlays() {
+        ACTIVE_OVERLAYS.clear();
+        ACTIVE_OVERLAYS.putAll(
+                LavenderClientStorage.getActiveStructures()
+                        .stream()
+                        .map((structure) -> Pair.of(structure.pos(), new OverlayEntry(structure.id(), structure.rotation(), structure.visibleLayer())))
+                        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight))
+        );
     }
 
     public static void initialize() {
@@ -269,6 +290,7 @@ public class StructureOverlayRenderer {
             if (!player.isSneaking()) targetPos = targetPos.offset(hitResult.getSide());
 
             ACTIVE_OVERLAYS.put(targetPos, PENDING_OVERLAY);
+            saveActiveOverlays();
             PENDING_OVERLAY = null;
 
             player.swingHand(hand);
@@ -320,6 +342,12 @@ public class StructureOverlayRenderer {
         public OverlayEntry(Identifier structureId, BlockRotation rotation) {
             this.structureId = structureId;
             this.rotation = rotation;
+        }
+
+        public OverlayEntry(Identifier structureId, BlockRotation rotation, int visibleLayer) {
+            this.structureId = structureId;
+            this.rotation = rotation;
+            this.visibleLayer = visibleLayer;
         }
 
         public @Nullable StructureTemplate fetchStructure() {

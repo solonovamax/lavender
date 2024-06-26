@@ -6,14 +6,23 @@ import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.lavender.client.LavenderClient;
+import io.wispforest.lavender.client.StructureOverlayRenderer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.util.BlockRotation;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 public class LavenderClientStorage {
 
@@ -23,6 +32,9 @@ public class LavenderClientStorage {
     private static final TypeToken<Map<UUID, Set<Identifier>>> OPENED_BOOKS_TYPE = new TypeToken<>() {};
     private static Map<UUID, Set<Identifier>> openedBooks;
 
+    private static final TypeToken<Map<UUID, List<ActiveStructureOverlay>>> ACTIVE_STRUCTURES_TYPE = new TypeToken<>() {};
+    private static Map<UUID, List<ActiveStructureOverlay>> activeStructures;
+
     private static final Gson GSON = new GsonBuilder().registerTypeAdapter(Identifier.class, new Identifier.Serializer()).setPrettyPrinting().create();
 
     static {
@@ -31,9 +43,11 @@ public class LavenderClientStorage {
 
             bookmarks = GSON.fromJson(data.get("bookmarks"), BOOKMARKS_TYPE);
             openedBooks = GSON.fromJson(data.get("opened_books"), OPENED_BOOKS_TYPE);
+            activeStructures = GSON.fromJson(data.get("active_structures"), ACTIVE_STRUCTURES_TYPE);
         } catch (Exception e) {
             bookmarks = new HashMap<>();
             openedBooks = new HashMap<>();
+            activeStructures = new HashMap<>();
             save();
         }
     }
@@ -78,11 +92,29 @@ public class LavenderClientStorage {
         return openedBooks.computeIfAbsent(LavenderClient.currentWorldId(), $ -> new HashSet<>());
     }
 
+    public static List<ActiveStructureOverlay> getActiveStructures() {
+        return activeStructures.computeIfAbsent(LavenderClient.currentWorldId(), $ -> new ArrayList<>());
+    }
+
+    public static void setActiveStructures(Map<BlockPos, StructureOverlayRenderer.OverlayEntry> activeStructures) {
+        getActiveStructures().clear();
+        getActiveStructures().addAll(activeStructures.entrySet()
+                .stream()
+                .map((entry) -> {
+                    var pos = entry.getKey();
+                    var overlay = entry.getValue();
+                    return new ActiveStructureOverlay(pos, overlay.structureId, overlay.rotation, overlay.visibleLayer);
+                })
+                .toList());
+        save();
+    }
+
     private static void save() {
         try {
             var data = new JsonObject();
             data.add("bookmarks", GSON.toJsonTree(bookmarks, BOOKMARKS_TYPE.getType()));
             data.add("opened_books", GSON.toJsonTree(openedBooks, OPENED_BOOKS_TYPE.getType()));
+            data.add("active_structure", GSON.toJsonTree(activeStructures, ACTIVE_STRUCTURES_TYPE.getType()));
 
             Files.writeString(storageFile(), GSON.toJson(data));
         } catch (IOException e) {
@@ -106,4 +138,9 @@ public class LavenderClientStorage {
             };
         }
     }
+
+    public record ActiveStructureOverlay(BlockPos pos, Identifier id, BlockRotation rotation, int visibleLayer) {
+
+    }
 }
+
