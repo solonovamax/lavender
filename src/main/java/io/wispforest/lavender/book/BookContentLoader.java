@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.gson.*;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.serialization.JsonOps;
 import io.wispforest.lavender.Lavender;
 import io.wispforest.owo.ui.component.Components;
 import io.wispforest.owo.ui.container.Containers;
@@ -11,6 +12,8 @@ import io.wispforest.owo.ui.core.Component;
 import io.wispforest.owo.ui.core.Sizing;
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener;
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.conditions.v1.ResourceCondition;
+import net.fabricmc.fabric.api.resource.conditions.v1.ResourceConditions;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.command.argument.ItemStringReader;
 import net.minecraft.item.Item;
@@ -204,9 +207,13 @@ public class BookContentLoader implements SynchronousResourceReloader, Identifia
                 meta = GSON.fromJson(content.substring(0, frontmatterEnd), JsonObject.class);
                 content = content.substring(frontmatterEnd + 3).stripLeading();
 
-//                return ResourceConditions.objectMatchesConditions(meta)
-//                        ? new MarkdownResource(meta, book.expandMacros(resourceId, content.replaceAll("\\r\\n?", "\n")))
-//                        : null;
+                if (meta.has(ResourceConditions.CONDITIONS_KEY)) {
+                    var conditions = ResourceCondition.CONDITION_CODEC.parse(JsonOps.INSTANCE, meta.get(ResourceConditions.CONDITIONS_KEY));
+                    if (conditions.isSuccess() && !conditions.getOrThrow().test(MinecraftClient.getInstance().world.getRegistryManager())) {
+                        return null;
+                    }
+                }
+
                 return new MarkdownResource(meta, book.expandMacros(resourceId, content.replaceAll("\\r\\n?", "\n")));
             } else {
                 throw new RuntimeException("Missing markdown meta");
